@@ -328,7 +328,7 @@ function MarkdownPreview({ content }) {
         if (line.startsWith("- [ ]")) return <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", color: C.muted, fontSize: 13 }}><span style={{ color: C.amber }}>☐</span>{line.slice(6)}</div>;
         if (line.startsWith("- [x]")) return <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", color: C.muted, fontSize: 13 }}><span style={{ color: C.green }}>☑</span>{line.slice(6)}</div>;
         if (line.startsWith("- ")) return <div key={i} style={{ paddingLeft: 16, color: C.text, fontSize: 13 }}>• {line.slice(2)}</div>;
-        if (line.startsWith(/\d+\. /)) return <div key={i} style={{ paddingLeft: 16, color: C.text, fontSize: 13 }}>{line}</div>;
+        if (/^\d+\. /.test(line)) return <div key={i} style={{ paddingLeft: 16, color: C.text, fontSize: 13 }}>{line}</div>;
         if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
         return <p key={i} style={{ margin: "4px 0", fontSize: 13, color: C.text }}>{line}</p>;
       })}
