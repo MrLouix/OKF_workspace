@@ -110,6 +110,7 @@ const SAMPLE_LOG = `# log.md — Journal des modifications
 
 // ─── PARSE FRONT-MATTER ──────────────────────────────────────────────────────
 function parseFrontMatter(md) {
+  if (!md) return {};
   const match = md.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return {};
   const meta = {};
@@ -305,6 +306,7 @@ function ChunksDrawer({ chunks, ragStatus }) {
 
 // ─── MARKDOWN PREVIEW ────────────────────────────────────────────────────────
 function MarkdownPreview({ content }) {
+  if (!content) return null;
   const lines = content.replace(/^---[\s\S]*?---\n/, "").split("\n");
   return (
     <div style={{ fontFamily: "monospace", lineHeight: 1.7, color: C.text, fontSize: 14 }}>
@@ -699,7 +701,13 @@ ${readOnly
 function OKFPanel({ content, onChange, meta, readOnly }) {
   const [tab, setTab] = useState(readOnly ? "preview" : "edit");
   const [copied, setCopied] = useState(false);
-  useEffect(() => { if (readOnly) setTab("preview"); }, [readOnly]);
+  useEffect(() => {
+    if (readOnly) {
+      setTab("preview");
+    } else if (tab === "preview") {
+      setTab("edit");
+    }
+  }, [readOnly, tab]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content);
@@ -774,7 +782,7 @@ function OKFPanel({ content, onChange, meta, readOnly }) {
 
       <div style={{ flex: 1, overflow: "hidden" }}>
         {tab === "edit" ? (
-          <textarea value={content} onChange={e => onChange(e.target.value)}
+          <textarea value={content || ""} onChange={e => onChange(e.target.value)}
             style={{
               width: "100%", height: "100%", background: C.bg, border: "none",
               color: C.text, fontFamily: "monospace", fontSize: 12, lineHeight: 1.7,
@@ -831,7 +839,7 @@ function SideFiles({ indexContent, logContent, onIndexChange, onLogChange, readO
         </div>
       </div>
       <textarea
-        value={active === "index" ? indexContent : logContent}
+        value={active === "index" ? indexContent || "" : logContent || ""}
         onChange={e => !readOnly && (active === "index" ? onIndexChange : onLogChange)(e.target.value)}
         readOnly={readOnly}
         style={{
