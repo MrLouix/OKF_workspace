@@ -910,7 +910,7 @@ export default function OKFWorkspace() {
   console.log('[OKFWorkspace] Rendering with readOnly:', readOnly, 'layout:', layout);
   try {
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg, color: C.text, fontFamily: "system-ui" }}>
+    <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100vh", background: C.bg, color: C.text, fontFamily: "system-ui" }}>
       {/* global header */}
       <div style={{
         display: "flex", alignItems: "center", gap: 12, padding: "0 16px",
@@ -972,7 +972,7 @@ export default function OKFWorkspace() {
       </div>
 
       {/* 3-column grid */}
-      <div style={{ flex: 1, display: "grid", gridTemplateColumns: colW.join(" "), overflow: "hidden", transition: "grid-template-columns .3s" }}>
+      <div style={{ flex: 1, display: "grid", width: "100%", gridTemplateColumns: colW.join(" "), overflow: "hidden", transition: "grid-template-columns .3s" }}>
         <div style={{ display: "flex", flexDirection: "column", borderRight: `1px solid ${C.border}`, overflow: "hidden" }}>
           <div style={{ flex: "0 0 65%", overflow: "hidden" }}>
             <OKFPanel content={okfContent} onChange={setOkfContent} meta={meta} readOnly={readOnly} />
