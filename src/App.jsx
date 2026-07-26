@@ -999,6 +999,7 @@ export default function OKFWorkspace() {
           50% { opacity: 1; transform: scale(1); }
         }
         * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
