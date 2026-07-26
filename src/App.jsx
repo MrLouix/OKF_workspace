@@ -973,19 +973,19 @@ export default function OKFWorkspace() {
 
       {/* 3-column grid */}
       <div style={{ flex: 1, display: "grid", width: "100%", gridTemplateColumns: colW.join(" "), overflow: "hidden", transition: "grid-template-columns .3s" }}>
-        <div style={{ display: "flex", flexDirection: "column", borderRight: `1px solid ${C.border}`, overflow: "hidden" }}>
-          <div style={{ flex: "0 0 65%", overflow: "hidden" }}>
+        <div style={{ display: "flex", flexDirection: "column", width: "100%", borderRight: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div style={{ flex: "0 0 65%", width: "100%", overflow: "hidden" }}>
             <OKFPanel content={okfContent} onChange={setOkfContent} meta={meta} readOnly={readOnly} />
           </div>
-          <div style={{ flex: 1, overflow: "hidden" }}>
+          <div style={{ flex: 1, width: "100%", overflow: "hidden" }}>
             <SideFiles indexContent={indexContent} logContent={logContent}
               onIndexChange={setIndexContent} onLogChange={setLogContent} readOnly={readOnly} />
           </div>
         </div>
-        <div style={{ borderRight: `1px solid ${C.border}`, overflow: "hidden" }}>
+        <div style={{ width: "100%", borderRight: `1px solid ${C.border}`, overflow: "hidden" }}>
           <PDFPanel meta={meta} />
         </div>
-        <div style={{ overflow: "hidden" }}>
+        <div style={{ width: "100%", overflow: "hidden" }}>
           <ChatPanel
             okfContent={okfContent} indexContent={indexContent} logContent={logContent}
             onApplyEdit={handleApplyEdit} readOnly={readOnly} meta={meta}
@@ -1000,6 +1000,7 @@ export default function OKFWorkspace() {
         }
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+        #root { width: 100%; height: 100%; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
