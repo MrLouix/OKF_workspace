@@ -110,6 +110,7 @@ const SAMPLE_LOG = `# log.md — Journal des modifications
 
 // ─── PARSE FRONT-MATTER ──────────────────────────────────────────────────────
 function parseFrontMatter(md) {
+  console.log('[parseFrontMatter] input:', md?.substring(0, 50) + (md?.length > 50 ? '...' : ''));
   if (!md) return {};
   const match = md.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return {};
@@ -306,6 +307,7 @@ function ChunksDrawer({ chunks, ragStatus }) {
 
 // ─── MARKDOWN PREVIEW ────────────────────────────────────────────────────────
 function MarkdownPreview({ content }) {
+  console.log('[MarkdownPreview] content:', content?.substring(0, 50) + (content?.length > 50 ? '...' : ''));
   if (!content) return null;
   const lines = content.replace(/^---[\s\S]*?---\n/, "").split("\n");
   return (
@@ -702,6 +704,7 @@ function OKFPanel({ content, onChange, meta, readOnly }) {
   const [tab, setTab] = useState(readOnly ? "preview" : "edit");
   const [copied, setCopied] = useState(false);
   useEffect(() => {
+    console.log('[OKFPanel] readOnly changed:', readOnly, 'current tab:', tab);
     if (readOnly) {
       setTab("preview");
     } else if (tab === "preview") {
@@ -758,7 +761,7 @@ function OKFPanel({ content, onChange, meta, readOnly }) {
         {meta?.liens && (
           <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 10, color: C.muted }}><Icon.link /> Liens:</span>
-            {meta.liens.replace(/[[\]]/g, "").split(",").map(l => (
+            {console.log('[OKFPanel] meta.liens:', meta.liens) || (meta.liens || "").replace(/[[\]]/g, "").split(",").map(l => (
               <span key={l} style={{ fontSize: 10, background: `${C.blue}11`, color: C.blue, borderRadius: 4, padding: "1px 6px", border: `1px solid ${C.blue}33` }}>{l.trim()}</span>
             ))}
           </div>
@@ -875,7 +878,22 @@ export default function OKFWorkspace() {
   const [layout, setLayout] = useState("3col");
   const [readOnly, setReadOnly] = useState(false);
 
+  // Error boundary-like logging
+  useEffect(() => {
+    const handleError = (event) => {
+      console.error('[Global Error]', event.error?.message, event.error?.stack);
+    };
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', (e) => {
+      console.error('[Unhandled Rejection]', e.reason?.message, e.reason?.stack);
+    });
+    return () => {
+      window.removeEventListener('error', handleError);
+    };
+  }, []);
+
   const meta = parseFrontMatter(okfContent);
+  console.log('[OKFWorkspace] readOnly:', readOnly, 'meta:', meta, 'okfContent length:', okfContent?.length);
 
   const handleApplyEdit = useCallback(({ fiche, index, log }) => {
     if (fiche) setOkfContent(fiche);
@@ -889,6 +907,8 @@ export default function OKFWorkspace() {
     "focus-pdf": ["0.5fr", "2fr", "1fr"],
   }[layout];
 
+  console.log('[OKFWorkspace] Rendering with readOnly:', readOnly, 'layout:', layout);
+  try {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg, color: C.text, fontFamily: "system-ui" }}>
       {/* global header */}
@@ -918,7 +938,10 @@ export default function OKFWorkspace() {
         </span>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <button onClick={() => setReadOnly(r => !r)} style={{
+          <button onClick={() => {
+            console.log('[Toggle] Current readOnly:', readOnly, '->', !readOnly);
+            setReadOnly(r => !r);
+          }} style={{
             display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20,
             fontSize: 11, fontFamily: "monospace", cursor: "pointer", border: "1px solid", transition: "all .2s",
             background: readOnly ? `${C.amber}22` : "transparent",
@@ -982,5 +1005,8 @@ export default function OKFWorkspace() {
         ::-webkit-scrollbar-thumb:hover { background: #484f58; }
       `}</style>
     </div>
-  );
+  )} catch (error) {
+    console.error('[OKFWorkspace] Render error:', error.message, error.stack);
+    return <div style={{color: 'red', padding: '20px'}}>Erreur de rendu: {error.message}</div>;
+  }
 }
