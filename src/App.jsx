@@ -707,10 +707,8 @@ function OKFPanel({ content, onChange, meta, readOnly }) {
     console.log('[OKFPanel] readOnly changed:', readOnly, 'current tab:', tab);
     if (readOnly) {
       setTab("preview");
-    } else if (tab === "preview") {
-      setTab("edit");
     }
-  }, [readOnly, tab]);
+  }, [readOnly]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content);
