@@ -309,11 +309,11 @@ function MarkdownPreview({ content }) {
   return (
     <div style={{ fontFamily: "monospace", lineHeight: 1.7, color: C.text, fontSize: 14 }}>
       {lines.map((line, i) => {
-        if (/^### /.test(line)) return <h3 key={i} style={{ color: C.blue, fontSize: 14, marginTop: 16, marginBottom: 4 }}>{line.slice(4)}</h3>;
-        if (/^## /.test(line))  return <h2 key={i} style={{ color: C.text, fontSize: 16, borderBottom: `1px solid ${C.border}`, paddingBottom: 4, marginTop: 20 }}>{line.slice(3)}</h2>;
-        if (/^# /.test(line))   return <h1 key={i} style={{ color: C.amber, fontSize: 18, marginBottom: 12 }}>{line.slice(2)}</h1>;
-        if (/^\| /.test(line)) {
-          if (/^[\| -]+$/.test(line)) return null;
+        if (line.startsWith("### ")) return <h3 key={i} style={{ color: C.blue, fontSize: 14, marginTop: 16, marginBottom: 4 }}>{line.slice(4)}</h3>;
+        if (line.startsWith("## "))  return <h2 key={i} style={{ color: C.text, fontSize: 16, borderBottom: `1px solid ${C.border}`, paddingBottom: 4, marginTop: 20 }}>{line.slice(3)}</h2>;
+        if (line.startsWith("# "))   return <h1 key={i} style={{ color: C.amber, fontSize: 18, marginBottom: 12 }}>{line.slice(2)}</h1>;
+        if (line.startsWith("| ")) {
+          if (/^[| -]+$/.test(line)) return null;
           const cells = line.split("|").filter(c => c.trim());
           return (
             <div key={i} style={{ display: "grid", gridTemplateColumns: `repeat(${cells.length}, 1fr)`, borderBottom: `1px solid ${C.border}26` }}>
@@ -321,10 +321,10 @@ function MarkdownPreview({ content }) {
             </div>
           );
         }
-        if (/^- \[ \]/.test(line)) return <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", color: C.muted, fontSize: 13 }}><span style={{ color: C.amber }}>☐</span>{line.slice(6)}</div>;
-        if (/^- \[x\]/.test(line)) return <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", color: C.muted, fontSize: 13 }}><span style={{ color: C.green }}>☑</span>{line.slice(6)}</div>;
-        if (/^- /.test(line)) return <div key={i} style={{ paddingLeft: 16, color: C.text, fontSize: 13 }}>• {line.slice(2)}</div>;
-        if (/^\d+\. /.test(line)) return <div key={i} style={{ paddingLeft: 16, color: C.text, fontSize: 13 }}>{line}</div>;
+        if (line.startsWith("- [ ]")) return <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", color: C.muted, fontSize: 13 }}><span style={{ color: C.amber }}>☐</span>{line.slice(6)}</div>;
+        if (line.startsWith("- [x]")) return <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", color: C.muted, fontSize: 13 }}><span style={{ color: C.green }}>☑</span>{line.slice(6)}</div>;
+        if (line.startsWith("- ")) return <div key={i} style={{ paddingLeft: 16, color: C.text, fontSize: 13 }}>• {line.slice(2)}</div>;
+        if (line.startsWith(/\d+\. /)) return <div key={i} style={{ paddingLeft: 16, color: C.text, fontSize: 13 }}>{line}</div>;
         if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
         return <p key={i} style={{ margin: "4px 0", fontSize: 13, color: C.text }}>{line}</p>;
       })}
@@ -521,7 +521,7 @@ ${readOnly
         try {
           edits = JSON.parse(editsMatch[1].trim());
           displayText = text.replace(/<EDITS>[\s\S]*?<\/EDITS>/, "").trim();
-        } catch (e) {}
+        } catch {}
       }
 
       setMessages(prev => [...prev, { role: "assistant", content: displayText, edits, chunks }]);
@@ -750,7 +750,7 @@ function OKFPanel({ content, onChange, meta, readOnly }) {
         {meta?.liens && (
           <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 10, color: C.muted }}><Icon.link /> Liens:</span>
-            {meta.liens.replace(/[\[\]]/g, "").split(",").map(l => (
+            {meta.liens.replace(/[[\]]/g, "").split(",").map(l => (
               <span key={l} style={{ fontSize: 10, background: `${C.blue}11`, color: C.blue, borderRadius: 4, padding: "1px 6px", border: `1px solid ${C.blue}33` }}>{l.trim()}</span>
             ))}
           </div>
