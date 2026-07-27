@@ -1,6 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useBundle, generateId, getPDFRefByName, getOKFById } from '../useBundle';
+
+// Mock pdfIndexer for all tests to avoid actual Qdrant API calls
+vi.mock('../../utils/pdfIndexer', () => ({
+  indexPDFInQdrant: vi.fn().mockResolvedValue(undefined),
+  removePDFFromQdrant: vi.fn().mockResolvedValue(undefined),
+  pdfExistsInQdrant: vi.fn().mockResolvedValue(false),
+  extractTextFromPDF: vi.fn().mockResolvedValue('extracted text'),
+  splitTextIntoChunks: vi.fn().mockReturnValue(['chunk1', 'chunk2']),
+}));
 
 describe('generateId', () => {
   it('produces unique ids with the given prefix', () => {
@@ -76,15 +85,15 @@ describe('useBundle', () => {
     expect(result.current.showInitializer).toBe(false);
   });
 
-  it('addPDF registers the file, adds a PDF reference to the bundle, and makes it active', () => {
+  it('addPDF registers the file, adds a PDF reference to the bundle, and makes it active', async () => {
     const { result } = renderHook(() => useBundle());
     act(() => {
       result.current.createBundle({ id: 'b1', name: 'Bundle', pdfs: [] });
     });
     const file = new File(['%PDF-1.4'], 'doc.pdf', { type: 'application/pdf' });
     let pdfId;
-    act(() => {
-      pdfId = result.current.addPDF(file, { start: 1, end: 20, raw: '1-20' });
+    await act(async () => {
+      pdfId = await result.current.addPDF(file, { start: 1, end: 20, raw: '1-20' });
     });
     expect(result.current.pdfFiles[pdfId].file).toBe(file);
     expect(result.current.bundleConfig.pdfs).toHaveLength(1);
@@ -94,7 +103,7 @@ describe('useBundle', () => {
     expect(result.current.currentPage).toBe(1);
   });
 
-  it('removePDF drops the file and, when it was active, falls back to the first remaining PDF', () => {
+  it('removePDF drops the file and, when it was active, falls back to the first remaining PDF', async () => {
     const { result } = renderHook(() => useBundle());
     act(() => {
       result.current.createBundle({ id: 'b1', name: 'Bundle', pdfs: [] });
@@ -102,17 +111,17 @@ describe('useBundle', () => {
     const fileA = new File(['a'], 'a.pdf', { type: 'application/pdf' });
     const fileB = new File(['b'], 'b.pdf', { type: 'application/pdf' });
     let idA, idB;
-    act(() => {
-      idA = result.current.addPDF(fileA);
+    await act(async () => {
+      idA = await result.current.addPDF(fileA);
     });
-    act(() => {
-      idB = result.current.addPDF(fileB);
+    await act(async () => {
+      idB = await result.current.addPDF(fileB);
     });
     // idB is active (most recently added)
     expect(result.current.activePDFId).toBe(idB);
 
-    act(() => {
-      result.current.removePDF(idB);
+    await act(async () => {
+      await result.current.removePDF(idB);
     });
 
     expect(result.current.pdfFiles[idB]).toBeUndefined();
@@ -120,7 +129,7 @@ describe('useBundle', () => {
     expect(result.current.activePDFId).toBe(idA);
   });
 
-  it('removePDF leaves activePDFId untouched when removing a non-active PDF', () => {
+  it('removePDF leaves activePDFId untouched when removing a non-active PDF', async () => {
     const { result } = renderHook(() => useBundle());
     act(() => {
       result.current.createBundle({ id: 'b1', name: 'Bundle', pdfs: [] });
@@ -128,14 +137,14 @@ describe('useBundle', () => {
     const fileA = new File(['a'], 'a.pdf', { type: 'application/pdf' });
     const fileB = new File(['b'], 'b.pdf', { type: 'application/pdf' });
     let idA, idB;
-    act(() => {
-      idA = result.current.addPDF(fileA);
+    await act(async () => {
+      idA = await result.current.addPDF(fileA);
     });
-    act(() => {
-      idB = result.current.addPDF(fileB);
+    await act(async () => {
+      idB = await result.current.addPDF(fileB);
     });
-    act(() => {
-      result.current.removePDF(idA);
+    await act(async () => {
+      await result.current.removePDF(idA);
     });
     expect(result.current.activePDFId).toBe(idB);
   });
@@ -214,8 +223,8 @@ describe('useBundle', () => {
       result.current.createBundle({ id: 'old', name: 'Old Bundle', pdfs: [] });
     });
     const oldFile = new File(['a'], 'old.pdf', { type: 'application/pdf' });
-    act(() => {
-      result.current.addPDF(oldFile);
+    await act(async () => {
+      await result.current.addPDF(oldFile);
     });
     expect(Object.keys(result.current.pdfFiles)).toHaveLength(1);
     expect(result.current.activePDFId).not.toBeNull();

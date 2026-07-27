@@ -4,6 +4,7 @@
 // Co-Authored-By: Mistral Vibe <vibe@mistral.ai>
 
 import { BundleConfig, OKFFile, BundleJSON } from '../types';
+import JSZip from 'jszip';
 
 // Short random suffix appended to Date.now()-based ids so two ids generated
 // within the same millisecond (e.g. adding several PDFs in a loop) don't collide.
@@ -217,6 +218,52 @@ export function exportBundleAsZIP(bundleConfig: BundleConfig | null, okfFiles: O
   });
   
   console.log('Bundle exported as individual files');
+}
+
+/**
+ * Export all .md files (OKF files, index.md, log.md) to a single ZIP file
+ * @param bundleConfig - Bundle configuration
+ * @param okfFiles - Array of OKF files
+ * @param indexContent - Content of index.md
+ * @param logContent - Content of log.md
+ */
+export function exportAllAsZIP(
+  bundleConfig: BundleConfig | null,
+  okfFiles: OKFFile[],
+  indexContent: string,
+  logContent: string
+): void {
+  if (!bundleConfig) return;
+  
+  const zip = new JSZip();
+  
+  // Add index.md
+  if (indexContent) {
+    zip.file('index.md', indexContent);
+  }
+  
+  // Add log.md
+  if (logContent) {
+    zip.file('log.md', logContent);
+  }
+  
+  // Add each OKF file
+  okfFiles.forEach(okfFile => {
+    const fileName = `${okfFile.id || `fiche-${Date.now()}`}.md`;
+    zip.file(fileName, okfFile.content);
+  });
+  
+  // Generate ZIP
+  zip.generateAsync({ type: 'blob' }).then((content: Blob) => {
+    const url = URL.createObjectURL(content);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${bundleConfig.name.replace(/[^a-z0-9]/gi, '_')}_all_files.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
 }
 
 /**

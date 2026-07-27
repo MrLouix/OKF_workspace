@@ -4,7 +4,20 @@
 // Co-Authored-By: Mistral Vibe <vibe@mistral.ai>
 
 import { RAGRequest, RAGResponse, RAGChunk } from '../types';
-import { RAG_API_URL, RAG_TOP_K, RAG_API_KEY } from '../constants';
+import {
+  RAG_API_URL,
+  RAG_TOP_K,
+  RAG_API_KEY,
+  QDRANT_COLLECTION,
+  MISTRAL_EMBEDDINGS_URL
+} from '../constants';
+
+/**
+ * Mistral API Key for embeddings (from environment)
+ * Uses the same key as LLM if available
+ */
+const MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY || 
+  import.meta.env.VITE_LLM_API_KEY || "";
 
 /**
  * Build RAG query from metadata and user message
@@ -63,7 +76,47 @@ export function buildRagQuery(
 }
 
 /**
- * Fetch chunks from RAG API
+ * Get embeddings from Mistral API
+ * @param text - Text to embed
+ * @returns Promise resolving to embedding vector
+ */
+async function getMistralEmbedding(text: string): Promise<number[]> {
+  if (!MISTRAL_API_KEY || !MISTRAL_EMBEDDINGS_URL) {
+    throw new Error("Mistral API key or embeddings URL not configured");
+  }
+  
+  try {
+    const resp = await fetch(MISTRAL_EMBEDDINGS_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${MISTRAL_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "mistral-embed",
+        input: text,
+      }),
+    });
+    
+    if (!resp.ok) {
+      throw new Error(`Mistral embeddings API error: HTTP ${resp.status}`);
+    }
+    
+    const data = await resp.json();
+    // Mistral returns: { data: [{ embedding: [...] }] }
+    if (data.data && data.data[0] && data.data[0].embedding) {
+      return data.data[0].embedding;
+    }
+    throw new Error("Invalid response format from Mistral embeddings API");
+  } catch (err: any) {
+    console.warn("Failed to get Mistral embedding:", err.message);
+    throw err;
+  }
+}
+
+/**
+ * Fetch chunks from Qdrant
+ * Uses Qdrant's native API: /collections/{name}/points/search
  * @param meta - Parsed metadata
  * @param userMessage - User's message
  * @param bundleConfig - Current bundle configuration
@@ -74,11 +127,12 @@ export async function fetchRagChunks(
   userMessage: string,
   bundleConfig: any | null
 ): Promise<RAGChunk[]> {
-  if (!RAG_API_URL) return [];
+  if (!RAG_API_URL || !QDRANT_COLLECTION) {
+    console.warn("Qdrant not configured: missing RAG_API_URL or QDRANT_COLLECTION");
+    return [];
+  }
   
-  const query = buildRagQuery(meta, userMessage, bundleConfig);
-  
-  // Get refs for RAG API
+  // Get refs for filtering
   const refs: string[] = [];
   if (meta?.ref_document) {
     refs.push(...meta.ref_document.split(',').map(r => r.trim()).filter(Boolean));
@@ -94,34 +148,66 @@ export async function fetchRagChunks(
     }
   }
   
-  // Get pages from metadata
+  // Get pages from metadata (for context, not used in Qdrant search)
   const pages = meta?.pages || meta?.pages_pdf || null;
   
   try {
-    const requestBody: RAGRequest = {
-      query,
-      refs,
-      pages: pages ? { start: pages.start, end: pages.end } : null,
-      top_k: RAG_TOP_K
+    // 1. Get embedding for the query
+    const queryEmbedding = await getMistralEmbedding(userMessage);
+    
+    // 2. Build Qdrant filter from refs
+    // If we have refs, filter by them; otherwise, search all
+    const filter = refs.length > 0 ? {
+      must: refs.map(ref => ({
+        key: "ref",
+        match: { value: ref }
+      }))
+    } : undefined;
+    
+    // 3. Search in Qdrant
+    const searchEndpoint = `${RAG_API_URL}/collections/${QDRANT_COLLECTION}/points/search`;
+    const searchBody = {
+      vector: queryEmbedding,
+      limit: RAG_TOP_K,
+      filter: filter,
+      with_payload: true,
+      with_vector: false
     };
     
-    const resp = await fetch(RAG_API_URL, {
+    const searchHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (RAG_API_KEY) {
+      searchHeaders["Authorization"] = `Bearer ${RAG_API_KEY}`;
+    }
+    
+    const resp = await fetch(searchEndpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(RAG_API_KEY ? { "Authorization": `Bearer ${RAG_API_KEY}` } : {}),
-      },
-      body: JSON.stringify(requestBody),
+      headers: searchHeaders,
+      body: JSON.stringify(searchBody),
     });
     
     if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      throw new Error(`Qdrant search error: HTTP ${resp.status}`);
     }
     
-    const data: RAGResponse = await resp.json();
-    return Array.isArray(data.chunks) ? data.chunks : [];
+    const data = await resp.json();
+    
+    // 4. Format Qdrant response to RAGChunk[]
+    // Qdrant returns: { result: { points: [{ id, payload, score }] } }
+    const points = data.result?.points || [];
+    
+    return points.map((point: any, index: number) => ({
+      id: point.id.toString() || `chunk-${index}`,
+      ref: point.payload?.ref || "unknown",
+      page_start: point.payload?.page_start || pages?.start || 1,
+      page_end: point.payload?.page_end || pages?.end || 1,
+      text: point.payload?.text || point.payload?.content || "",
+      score: point.score || 0
+    }));
+    
   } catch (err: any) {
-    console.warn("RAG retrieval failed:", err.message);
+    console.warn("Qdrant RAG retrieval failed:", err.message);
     return [];
   }
 }

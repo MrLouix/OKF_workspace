@@ -4,6 +4,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { parseFrontMatter } from '../utils/parseFrontMatter';
+import { indexPDFInQdrant, removePDFFromQdrant } from '../utils/pdfIndexer';
 import { SAMPLE_BUNDLE_CONFIG, SAMPLE_OKF_FILES, SAMPLE_GENERIC_INDEX, SAMPLE_GENERIC_LOG } from '../constants';
 
 /**
@@ -147,9 +148,9 @@ export function useBundle() {
   }, [bundleConfig, okfFiles]);
 
   /**
-   * Add a PDF file to the bundle
+   * Add a PDF file to the bundle and index it in Qdrant
    */
-  const addPDF = useCallback((file, pageRange = null) => {
+  const addPDF = useCallback(async (file, pageRange = null, onIndexingProgress) => {
     const pdfId = generateId('pdf');
     const url = URL.createObjectURL(file);
     
@@ -181,13 +182,24 @@ export function useBundle() {
     setActivePDFId(pdfId);
     setCurrentPage(1);
     
+    // Index the PDF in Qdrant (fire and forget - don't block the UI)
+    try {
+      await indexPDFInQdrant(file, file.name, pdfId, onIndexingProgress);
+    } catch (err) {
+      console.error('Failed to index PDF in Qdrant:', err);
+    }
+    
     return pdfId;
   }, []);
 
   /**
-   * Remove a PDF from the bundle
+   * Remove a PDF from the bundle and Qdrant index
    */
-  const removePDF = useCallback((pdfId) => {
+  const removePDF = useCallback(async (pdfId) => {
+    // Get the PDF name before removing
+    const pdfToRemove = bundleConfig?.pdfs.find(p => p.id === pdfId);
+    const pdfName = pdfToRemove?.name;
+    
     // Remove from pdfFiles
     setPdfFiles(prev => {
       const newPdfFiles = { ...prev };
@@ -212,6 +224,15 @@ export function useBundle() {
       const remaining = (bundleConfig?.pdfs || []).filter(p => p.id !== pdfId);
       return remaining[0]?.id || null;
     });
+    
+    // Remove from Qdrant index (fire and forget)
+    if (pdfName) {
+      try {
+        await removePDFFromQdrant(pdfName);
+      } catch (err) {
+        console.error('Failed to remove PDF from Qdrant:', err);
+      }
+    }
   }, [bundleConfig]);
 
   /**

@@ -7,17 +7,22 @@ import React, { useState } from 'react';
 import { C, btnStyle } from '../constants';
 
 /**
- * SideFiles - Editor for index.md and log.md
+ * SideFiles - Editor for index.md, log.md, and active OKF file
  * Occupies the lower part of the left column
  */
 export default function SideFiles({ 
   indexContent, 
   logContent, 
+  okfContent,
+  meta,
+  bundleConfig,
   onIndexChange, 
-  onLogChange, 
+  onLogChange,
+  onOKFChange,
+  onExportZIP,
   readOnly 
 }) {
-  const [active, setActive] = useState('index');
+  const [active, setActive] = useState('okf');
   const fileInputRef = React.useRef(null);
 
   // ==========================================================================
@@ -56,14 +61,16 @@ export default function SideFiles({
         display: 'flex',
         background: C.surface,
         borderBottom: `1px solid ${C.border}`,
-        flexShrink: 0
+        flexShrink: 0,
+        overflowX: 'auto'
       }}>
-        {[['index', '📋 index.md'], ['log', '📒 log.md']].map(([key, label]) => (
+        {[['okf', '📝 fiche.md'], ['index', '📋 index.md'], ['log', '📒 log.md']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActive(key)}
             style={{
               flex: 1,
+              minWidth: 80,
               padding: '5px 8px',
               fontSize: 11,
               background: 'transparent',
@@ -78,7 +85,7 @@ export default function SideFiles({
           </button>
         ))}
         
-        <div style={{ display: 'flex', gap: 2, padding: '4px 6px' }}>
+        <div style={{ display: 'flex', gap: 2, padding: '4px 6px', flexShrink: 0 }}>
           {!readOnly && (
             <label style={{ ...btnStyle('ghost'), cursor: 'pointer', padding: '2px 6px', fontSize: 10 }}>
               ↑
@@ -86,27 +93,53 @@ export default function SideFiles({
                 type="file"
                 accept=".md"
                 style={{ display: 'none' }}
-                onChange={handleFileLoad(active === 'index' ? onIndexChange : onLogChange)}
+                onChange={handleFileLoad(
+                  active === 'index' ? onIndexChange : 
+                  active === 'log' ? onLogChange : 
+                  onOKFChange
+                )}
                 ref={fileInputRef}
               />
             </label>
           )}
           <button
             onClick={() => handleFileSave(
-              active === 'index' ? 'index.md' : 'log.md',
-              active === 'index' ? indexContent : logContent
+              active === 'index' ? 'index.md' : 
+              active === 'log' ? 'log.md' : 
+              `${meta?.id || 'fiche'}.md`,
+              active === 'index' ? indexContent : 
+              active === 'log' ? logContent : 
+              okfContent || ''
             )}
             style={{ ...btnStyle('ghost'), padding: '2px 6px', fontSize: 10 }}
+            title="Télécharger ce fichier"
           >
             ↓
           </button>
+          {bundleConfig && (
+            <button
+              onClick={onExportZIP}
+              style={{ ...btnStyle('ghost'), padding: '2px 6px', fontSize: 10 }}
+              title="Exporter tous les fichiers .md en ZIP"
+            >
+              📦 ZIP
+            </button>
+          )}
         </div>
       </div>
 
       {/* Content */}
       <textarea
-        value={active === 'index' ? indexContent || '' : logContent || ''}
-        onChange={e => !readOnly && (active === 'index' ? onIndexChange : onLogChange)(e.target.value)}
+        value={
+          active === 'index' ? indexContent || '' : 
+          active === 'log' ? logContent || '' : 
+          okfContent || ''
+        }
+        onChange={e => !readOnly && (
+          active === 'index' ? onIndexChange : 
+          active === 'log' ? onLogChange : 
+          onOKFChange
+        )(e.target.value)}
         readOnly={readOnly}
         style={{
           flex: 1,

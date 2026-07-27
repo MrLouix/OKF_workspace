@@ -51,18 +51,30 @@ describe('fetchRagChunks', () => {
     vi.resetModules();
   });
 
-  it('returns [] without calling fetch when RAG_API_URL is empty (RAG disabled)', async () => {
+  it('returns [] without calling fetch when RAG_API_URL or QDRANT_COLLECTION is empty', async () => {
+    vi.doMock('../../constants', () => ({
+      RAG_API_URL: '',
+      QDRANT_COLLECTION: '',
+      RAG_TOP_K: 5,
+      RAG_API_KEY: '',
+      MISTRAL_EMBEDDINGS_URL: '',
+    }));
+    vi.resetModules();
+    const { fetchRagChunks: fetchWithMockedConstants } = await import('../ragUtils');
+    
     global.fetch = vi.fn();
-    const chunks = await fetchRagChunks({ ref_document: 'a.pdf' }, 'hello', bundleConfig);
+    const chunks = await fetchWithMockedConstants({ ref_document: 'a.pdf' }, 'hello', bundleConfig);
     expect(chunks).toEqual([]);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('returns [] and does not throw when the RAG API call fails', async () => {
     vi.doMock('../../constants', () => ({
-      RAG_API_URL: 'https://rag.example.com/retrieve',
+      RAG_API_URL: 'http://localhost:6333',
+      QDRANT_COLLECTION: 'okf_documents',
       RAG_TOP_K: 5,
       RAG_API_KEY: '',
+      MISTRAL_EMBEDDINGS_URL: 'https://api.mistral.ai/v1/embeddings',
     }));
     vi.resetModules();
     const { fetchRagChunks: fetchWithMockedConstants } = await import('../ragUtils');
@@ -71,36 +83,74 @@ describe('fetchRagChunks', () => {
     expect(chunks).toEqual([]);
   });
 
-  it('posts the expected request body and returns chunks on success', async () => {
+  it('posts to Qdrant with embeddings and returns formatted chunks on success', async () => {
     vi.doMock('../../constants', () => ({
-      RAG_API_URL: 'https://rag.example.com/retrieve',
+      RAG_API_URL: 'http://localhost:6333',
+      QDRANT_COLLECTION: 'okf_documents',
       RAG_TOP_K: 3,
       RAG_API_KEY: 'secret',
+      MISTRAL_EMBEDDINGS_URL: 'https://api.mistral.ai/v1/embeddings',
     }));
     vi.resetModules();
     const { fetchRagChunks: fetchWithMockedConstants } = await import('../ragUtils');
 
-    const mockChunks = [{ id: 'c1', ref: 'a.pdf', page_start: 1, page_end: 2, text: 'hi', score: 0.9 }];
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ chunks: mockChunks }),
+    // Mock embeddings response from Mistral
+    const mockEmbeddings = [0.1, 0.2, 0.3, 0.4];
+    // Mock Qdrant response
+    const mockQdrantPoints = [
+      {
+        id: 'c1',
+        payload: { ref: 'a.pdf', page_start: 1, page_end: 2, text: 'hello world' },
+        score: 0.9
+      }
+    ];
+    
+    // Mock both API calls
+    global.fetch = vi.fn().mockImplementation(async (url) => {
+      if (url.includes('embeddings')) {
+        // Mistral embeddings API
+        return {
+          ok: true,
+          json: async () => ({ data: [{ embedding: mockEmbeddings }] }),
+        };
+      } else if (url.includes('collections/okf_documents/points/search')) {
+        // Qdrant search
+        return {
+          ok: true,
+          json: async () => ({ result: { points: mockQdrantPoints } }),
+        };
+      }
+      return { ok: false };
     });
 
     const meta = { ref_document: 'a.pdf', pages: { start: 1, end: 5 } };
     const chunks = await fetchWithMockedConstants(meta, 'question', bundleConfig);
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      'https://rag.example.com/retrieve',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ Authorization: 'Bearer secret' }),
-      })
+    // Verify Mistral embeddings was called
+    const embeddingsCall = global.fetch.mock.calls.find(call => 
+      call[0].includes('embeddings')
     );
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
-    expect(body.top_k).toBe(3);
-    expect(body.pages).toEqual({ start: 1, end: 5 });
-    expect(body.refs).toContain('a.pdf');
-    expect(chunks).toEqual(mockChunks);
+    expect(embeddingsCall).toBeDefined();
+    expect(embeddingsCall[1].headers['Authorization']).toBeDefined();
+    
+    // Verify Qdrant was called
+    const qdrantCall = global.fetch.mock.calls.find(call => 
+      call[0].includes('collections/okf_documents/points/search')
+    );
+    expect(qdrantCall).toBeDefined();
+    expect(qdrantCall[1].headers['Authorization']).toBeDefined();
+    
+    // Verify the Qdrant search body contains the embedding vector
+    const qdrantBody = JSON.parse(qdrantCall[1].body);
+    expect(qdrantBody.vector).toEqual(mockEmbeddings);
+    expect(qdrantBody.limit).toBe(3);
+    // Note: refs include both meta.ref_document and bundleConfig.pdfs
+    expect(qdrantBody.filter.must.some((f) => f.key === 'ref' && f.match.value === 'a.pdf')).toBe(true);
+    
+    // Verify returned chunks are properly formatted
+    expect(chunks).toEqual([
+      { id: 'c1', ref: 'a.pdf', page_start: 1, page_end: 2, text: 'hello world', score: 0.9 }
+    ]);
   });
 });
 

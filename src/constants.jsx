@@ -6,17 +6,38 @@
 // CONFIGURATION LLM & RAG
 // ============================================================================
 
-// Remplacer par les valeurs du fournisseur cible
-export const LLM_API_URL = "https://api.anthropic.com/v1/messages";
-export const LLM_MODEL = "claude-sonnet-4-6";
-export const LLM_API_KEY = ""; // laisser vide si injecté par l'environnement
+// Chargement depuis les variables d'environnement (Vite)
+// Les valeurs par défaut sont utilisées si les variables ne sont pas définies
 
-// Stub RAG — remplacer RAG_API_URL par l'endpoint réel quand disponible.
-// L'endpoint doit accepter : POST { query: string, refs: string[], pages: {start,end}|null, top_k: number }
-// et retourner : { chunks: [{ id, ref, page_start, page_end, text, score }] }
-export const RAG_API_URL = ""; // ex. "https://mon-rag.example.com/retrieve"
-export const RAG_TOP_K = 5;
-export const RAG_API_KEY = ""; // laisser vide si injecté par l'environnement
+// Configuration LLM
+// Priorité pour l'URL : VITE_LLM_API_URL > "https://api.anthropic.com/v1/messages"
+export const LLM_API_URL = import.meta.env.VITE_LLM_API_URL || "https://api.anthropic.com/v1/messages";
+// Modèle par défaut
+export const LLM_MODEL = import.meta.env.VITE_LLM_MODEL || "claude-sonnet-4-6";
+// Priorité pour la clé API : VITE_LLM_API_KEY > VITE_MISTRAL_API_KEY > VITE_ANTHROPIC_API_KEY > VITE_OPENAI_API_KEY > ""
+export const LLM_API_KEY = import.meta.env.VITE_LLM_API_KEY ||
+  import.meta.env.VITE_MISTRAL_API_KEY ||
+  import.meta.env.VITE_ANTHROPIC_API_KEY ||
+  import.meta.env.VITE_OPENAI_API_KEY || "";
+
+// Configuration RAG avec Qdrant
+// Qdrant URL base (ex: http://localhost:6333)
+export const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || "";
+
+// Nom de la collection Qdrant à interroger
+export const QDRANT_COLLECTION = import.meta.env.VITE_QDRANT_COLLECTION || "okf_documents";
+
+// Nombre de résultats à retourner
+export const RAG_TOP_K = parseInt(import.meta.env.VITE_RAG_TOP_K || "5", 10);
+
+// Clé API pour Qdrant (optionnelle, Qdrant n'en nécessite pas par défaut)
+// Priorité : VITE_RAG_API_KEY > VITE_MISTRAL_API_KEY > ""
+export const RAG_API_KEY = import.meta.env.VITE_RAG_API_KEY ||
+  import.meta.env.VITE_MISTRAL_API_KEY || "";
+
+// URL de l'API Mistral Embeddings (pour vectoriser les requêtes)
+export const MISTRAL_EMBEDDINGS_URL = import.meta.env.VITE_MISTRAL_EMBEDDINGS_URL || 
+  "https://api.mistral.ai/v1/embeddings";
 
 // ============================================================================
 // PALETTE & DESIGN

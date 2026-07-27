@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ChatPanel from '../ChatPanel';
-import { LLM_API_URL } from '../../constants';
+import { LLM_API_URL, LLM_MODEL } from '../../constants';
+
+// Mock constants to use Anthropic format for consistent test behavior
+// This ensures tests work with the expected request/response format
+vi.mock('../../constants', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    LLM_API_URL: 'https://api.anthropic.com/v1/messages',
+    LLM_MODEL: 'claude-sonnet-4-6',
+  };
+});
 
 const baseProps = {
   okfContent: '---\nid: OKF-1\n---\nOKF BODY CONTENT',
@@ -25,20 +36,36 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('ChatPanel — RAG disabled (default constants, RAG_API_URL empty)', () => {
-  it('shows "RAG non configuré" before any message is sent', () => {
-    render(<ChatPanel {...baseProps} onApplyEdit={vi.fn()} />);
+describe('ChatPanel — RAG disabled (mocked empty RAG_API_URL)', () => {
+  beforeEach(() => {
+    vi.doMock('../../constants', async (importOriginal) => {
+      const actual = await importOriginal();
+      return {
+        ...actual,
+        RAG_API_URL: '',
+        QDRANT_COLLECTION: '',
+        LLM_API_URL: 'https://api.anthropic.com/v1/messages',
+        LLM_MODEL: 'claude-sonnet-4-6'
+      };
+    });
+    vi.resetModules();
+  });
+
+  it('shows "RAG non configuré" before any message is sent', async () => {
+    const { default: MockedChatPanel } = await import('../ChatPanel');
+    render(<MockedChatPanel {...baseProps} onApplyEdit={vi.fn()} />);
     expect(screen.getByText('RAG non configuré')).toBeInTheDocument();
   });
 
   it('still calls the LLM and renders the reply, with OKF/index/log context in the system prompt', async () => {
+    const { default: MockedChatPanel } = await import('../ChatPanel');
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ content: [{ text: 'Voici ma réponse.' }] }),
     });
     vi.stubGlobal('fetch', mockFetch);
 
-    render(<ChatPanel {...baseProps} onApplyEdit={vi.fn()} />);
+    render(<MockedChatPanel {...baseProps} onApplyEdit={vi.fn()} />);
     sendChatMessage('Bonjour');
 
     await waitFor(() => expect(screen.getByText('Voici ma réponse.')).toBeInTheDocument());
@@ -55,6 +82,7 @@ describe('ChatPanel — RAG disabled (default constants, RAG_API_URL empty)', ()
   });
 
   it('parses an <EDITS> block, shows the proposed-changes panel, and applies edits on click', async () => {
+    const { default: MockedChatPanel } = await import('../ChatPanel');
     const editsPayload = { fiche: 'NEW FICHE', index: 'NEW INDEX', log: 'NEW LOG', summary: 'Résumé test' };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -64,7 +92,7 @@ describe('ChatPanel — RAG disabled (default constants, RAG_API_URL empty)', ()
     }));
 
     const onApplyEdit = vi.fn();
-    render(<ChatPanel {...baseProps} onApplyEdit={onApplyEdit} />);
+    render(<MockedChatPanel {...baseProps} onApplyEdit={onApplyEdit} />);
     sendChatMessage('Mets à jour la fiche');
 
     await waitFor(() => expect(screen.getByText('Voici les changements.')).toBeInTheDocument());
@@ -81,6 +109,7 @@ describe('ChatPanel — RAG disabled (default constants, RAG_API_URL empty)', ()
   });
 
   it('disables applying edits in read-only mode and does not call onApplyEdit', async () => {
+    const { default: MockedChatPanel } = await import('../ChatPanel');
     const editsPayload = { fiche: 'NEW FICHE', summary: 'Résumé' };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -90,7 +119,7 @@ describe('ChatPanel — RAG disabled (default constants, RAG_API_URL empty)', ()
     }));
 
     const onApplyEdit = vi.fn();
-    render(<ChatPanel {...baseProps} readOnly onApplyEdit={onApplyEdit} />);
+    render(<MockedChatPanel {...baseProps} readOnly onApplyEdit={onApplyEdit} />);
     sendChatMessage('Question en lecture seule');
 
     await waitFor(() => expect(screen.getByText('Changement proposé.')).toBeInTheDocument());
@@ -100,19 +129,43 @@ describe('ChatPanel — RAG disabled (default constants, RAG_API_URL empty)', ()
   });
 });
 
-describe('ChatPanel — RAG enabled (mocked RAG_API_URL)', () => {
+describe('ChatPanel — RAG enabled (mocked Qdrant)', () => {
   it('transitions RAG status through loading -> ok, renders chunks in the drawer, and injects them into the system prompt', async () => {
     vi.doMock('../../constants', async (importOriginal) => {
       const actual = await importOriginal();
-      return { ...actual, RAG_API_URL: 'https://rag.example.com/retrieve', RAG_TOP_K: 5, RAG_API_KEY: '' };
+      return {
+        ...actual,
+        RAG_API_URL: 'http://localhost:6333',
+        QDRANT_COLLECTION: 'okf_documents',
+        RAG_TOP_K: 5,
+        RAG_API_KEY: '',
+        MISTRAL_EMBEDDINGS_URL: 'https://api.mistral.ai/v1/embeddings',
+        LLM_API_URL: 'https://api.anthropic.com/v1/messages',
+        LLM_MODEL: 'claude-sonnet-4-6'
+      };
     });
     vi.resetModules();
     const { default: MockedChatPanel } = await import('../ChatPanel');
 
-    const chunk = { id: 'c1', ref: 'ISO_9001_2015.pdf', page_start: 10, page_end: 12, text: 'Exigence de traçabilité détaillée.', score: 0.87 };
     const mockFetch = vi.fn((url) => {
-      if (url === 'https://rag.example.com/retrieve') {
-        return Promise.resolve({ ok: true, json: async () => ({ chunks: [chunk] }) });
+      if (url.includes('embeddings')) {
+        // Mistral embeddings
+        return Promise.resolve({ ok: true, json: async () => ({ data: [{ embedding: [0.1, 0.2, 0.3] }] }) });
+      }
+      if (url.includes('collections/okf_documents/points/search')) {
+        // Qdrant search - points have payload with metadata
+        return Promise.resolve({ 
+          ok: true, 
+          json: async () => ({
+            result: {
+              points: [{
+                id: 'c1',
+                payload: { ref: 'ISO_9001_2015.pdf', page_start: 10, page_end: 12, text: 'Exigence de traçabilité détaillée.' },
+                score: 0.87
+              }]
+            }
+          })
+        });
       }
       return Promise.resolve({ ok: true, json: async () => ({ content: [{ text: 'Réponse basée sur les extraits.' }] }) });
     });
@@ -125,13 +178,16 @@ describe('ChatPanel — RAG enabled (mocked RAG_API_URL)', () => {
 
     await waitFor(() => expect(screen.getByText('Réponse basée sur les extraits.')).toBeInTheDocument());
 
-    // Both the RAG endpoint and the LLM endpoint were called
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-    expect(mockFetch.mock.calls[0][0]).toBe('https://rag.example.com/retrieve');
-    expect(mockFetch.mock.calls[1][0]).toBe(LLM_API_URL);
+    // Mistral embeddings, Qdrant search, and LLM endpoint were all called
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    
+    // Verify Qdrant was called with correct endpoint
+    const qdrantCall = mockFetch.mock.calls.find(call => call[0].includes('collections/okf_documents/points/search'));
+    expect(qdrantCall).toBeDefined();
+    expect(mockFetch.mock.calls[2][0]).toBe(LLM_API_URL);
 
     // The chunk content made it into the LLM system prompt
-    const llmBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+    const llmBody = JSON.parse(mockFetch.mock.calls[2][1].body);
     expect(llmBody.system).toContain('ISO_9001_2015.pdf');
     expect(llmBody.system).toContain('Exigence de traçabilité détaillée.');
 
@@ -141,17 +197,29 @@ describe('ChatPanel — RAG enabled (mocked RAG_API_URL)', () => {
     expect(screen.getByText('ISO_9001_2015.pdf')).toBeInTheDocument();
   });
 
-  it('resolves refs from an OKF referencing multiple PDFs and includes them all in the RAG request', async () => {
+  it('resolves refs from an OKF referencing multiple PDFs and includes them all in the Qdrant filter', async () => {
     vi.doMock('../../constants', async (importOriginal) => {
       const actual = await importOriginal();
-      return { ...actual, RAG_API_URL: 'https://rag.example.com/retrieve', RAG_TOP_K: 5, RAG_API_KEY: '' };
+      return {
+        ...actual,
+        RAG_API_URL: 'http://localhost:6333',
+        QDRANT_COLLECTION: 'okf_documents',
+        RAG_TOP_K: 5,
+        RAG_API_KEY: '',
+        MISTRAL_EMBEDDINGS_URL: 'https://api.mistral.ai/v1/embeddings',
+        LLM_API_URL: 'https://api.anthropic.com/v1/messages',
+        LLM_MODEL: 'claude-sonnet-4-6'
+      };
     });
     vi.resetModules();
     const { default: MockedChatPanel } = await import('../ChatPanel');
 
     const mockFetch = vi.fn((url) => {
-      if (url === 'https://rag.example.com/retrieve') {
-        return Promise.resolve({ ok: true, json: async () => ({ chunks: [] }) });
+      if (url.includes('embeddings')) {
+        return Promise.resolve({ ok: true, json: async () => ({ data: [{ embedding: [0.1, 0.2] }] }) });
+      }
+      if (url.includes('collections/okf_documents/points/search')) {
+        return Promise.resolve({ ok: true, json: async () => ({ result: { points: [] } }) });
       }
       return Promise.resolve({ ok: true, json: async () => ({ content: [{ text: 'ok' }] }) });
     });
@@ -171,10 +239,15 @@ describe('ChatPanel — RAG enabled (mocked RAG_API_URL)', () => {
     render(<MockedChatPanel {...multiPdfProps} onApplyEdit={vi.fn()} />);
     sendChatMessage('Compare les deux normes');
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(3));
 
-    const ragBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(ragBody.refs).toEqual(expect.arrayContaining(['ISO_9001_2015.pdf', 'ISO_9000_2015.pdf']));
-    expect(ragBody.refs).toHaveLength(2);
+    // Find Qdrant call and verify filter contains both PDFs
+    const qdrantCall = mockFetch.mock.calls.find(call => call[0].includes('collections/okf_documents/points/search'));
+    const qdrantBody = JSON.parse(qdrantCall[1].body);
+    expect(qdrantBody.filter.must).toEqual(expect.arrayContaining([
+      { key: 'ref', match: { value: 'ISO_9001_2015.pdf' } },
+      { key: 'ref', match: { value: 'ISO_9000_2015.pdf' } }
+    ]));
+    expect(qdrantBody.filter.must).toHaveLength(2);
   });
 });

@@ -104,7 +104,7 @@ describe('App (composition root)', () => {
     // Header now shows the newly created bundle name
     expect(screen.getByText('Test Bundle')).toBeInTheDocument();
     // PDFPanel now shows a tab for the newly added PDF
-    expect(screen.getByText('doc.pdf')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'doc.pdf' })).toBeInTheDocument();
     // The old sample bundle content is gone
     expect(screen.queryByText('Normes ISO 9001')).not.toBeInTheDocument();
   });

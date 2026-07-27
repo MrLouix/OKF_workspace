@@ -35,3 +35,6 @@ coverage/
 # Misc
 *.bak
 *.tmp
+
+# Vibe specific
+.vibe/

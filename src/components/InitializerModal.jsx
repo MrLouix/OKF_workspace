@@ -146,8 +146,45 @@ export default function InitializerModal({ onCreate, onClose, isOpen }) {
       // Update bundle config with actual PDF refs
       bundleConfig.pdfs = pdfRefs;
       
-      // Create initial OKF files (empty)
-      const initialOKFFiles = [];
+      // Create initial OKF file with minimal content
+      // Use first PDF as reference if available, otherwise empty
+      const firstPDF = selectedPDFs[0];
+      const firstPDFRef = pdfRefs[0];
+      const okfId = `OKF-${Date.now()}`;
+      const initialOKFFiles = [
+        {
+          id: okfId,
+          title: 'Nouvelle fiche',
+          ref_document: firstPDF ? firstPDF.name : '',
+          pages: firstPDFRef ? firstPDFRef.pages : { start: 1, end: 100, raw: '1-100' },
+          status: 'DRAFT',
+          version: '1.0',
+          author: '',
+          tags: [],
+          related: [],
+          content: `---
+id: ${okfId}
+title: Nouvelle fiche
+ref_document: ${firstPDF ? firstPDF.name : ''}
+pages: ${firstPDFRef ? firstPDFRef.pages.raw : '1-100'}
+status: DRAFT
+version: 1.0
+---
+
+# ${okfId} — Nouvelle fiche
+
+## Objet
+
+## Domaine d'application
+
+## Exigences principales
+
+## Actions en cours
+
+## Historique
+`
+        }
+      ];
       
       // Call onCreate with the new bundle
       onCreate({
@@ -167,16 +204,6 @@ export default function InitializerModal({ onCreate, onClose, isOpen }) {
       setError(`Échec de la création du bundle: ${err.message}`);
       setLoading(false);
     }
-  };
-  
-  const handlePathSelect = (e) => {
-    // In browser, we can't directly select folders, so we use file input
-    // and extract the directory path from the first selected file
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    // For now, just store the filename as path (real folder selection would require native API)
-    setSelectedPath(file.webkitRelativePath || file.name);
   };
   
   const handlePDFSelect = (e) => {
@@ -315,19 +342,14 @@ export default function InitializerModal({ onCreate, onClose, isOpen }) {
                 Choisissez un dossier local où les PDFs et fiches OKF seront référencés.
               </p>
               
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                marginBottom: 16
-              }}>
+              <div style={{ marginBottom: 16 }}>
                 <input
                   type="text"
                   value={selectedPath}
                   onChange={(e) => setSelectedPath(e.target.value)}
-                  placeholder="Chemin du dossier (ex: /Documents/Projets/ISO)"
+                  placeholder="Chemin du dossier (ex: /home/user/Documents/Projets/ISO_9001)"
                   style={{
-                    flex: 1,
+                    width: '100%',
                     background: C.bg,
                     border: `1px solid ${C.border}`,
                     color: C.text,
@@ -337,16 +359,9 @@ export default function InitializerModal({ onCreate, onClose, isOpen }) {
                     fontSize: 12
                   }}
                 />
-                <label style={{ ...btnStyle('secondary'), cursor: 'pointer' }}>
-                  <Icon.upload /> Parcourir...
-                  <input
-                    type="file"
-                    directory=""
-                    webkitdirectory=""
-                    onChange={handlePathSelect}
-                    style={{ display: 'none' }}
-                  />
-                </label>
+                <p style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                  Entrez le chemin absolu ou relatif du dossier contenant vos PDFs
+                </p>
               </div>
               
               {selectedPath && (

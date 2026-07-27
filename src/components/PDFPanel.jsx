@@ -75,14 +75,27 @@ export default function PDFPanel({
   // HANDLERS
   // ==========================================================================
   
-  const handleFileLoad = (e) => {
+  const [indexingStatus, setIndexingStatus] = useState(null);
+
+  const handleFileLoad = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     if (isBundleMode && addPDF) {
       // Add as a new tab in the bundle rather than silently overriding
       // whichever tab currently has no blob loaded.
-      addPDF(file);
+      setIndexingStatus({ status: 'Indexation en cours...', progress: 0 });
+      try {
+        await addPDF(file, null, (progress) => {
+          setIndexingStatus(progress);
+        });
+        setIndexingStatus({ status: 'Indexation terminée', progress: 100 });
+        // Clear status after a delay
+        setTimeout(() => setIndexingStatus(null), 3000);
+      } catch (err) {
+        setIndexingStatus({ status: `Erreur: ${err.message}`, progress: 0 });
+        setTimeout(() => setIndexingStatus(null), 5000);
+      }
     } else {
       // Legacy/back-compat mode: no bundle configured yet
       const url = URL.createObjectURL(file);
@@ -157,6 +170,21 @@ export default function PDFPanel({
             <button onClick={handleAddPDF} style={btnStyle('secondary')}>
               <Icon.upload /> Ajouter
             </button>
+            
+            {/* Indexing Status Indicator */}
+            {indexingStatus && (
+              <span style={{
+                marginLeft: 8,
+                fontSize: 11,
+                color: C.teal,
+                fontFamily: 'monospace'
+              }}>
+                {indexingStatus.status}
+                {indexingStatus.progress !== undefined && indexingStatus.progress > 0 && (
+                  <span> ({Math.round(indexingStatus.progress)}%)</span>
+                )}
+              </span>
+            )}
           </>
         ) : (
           <>

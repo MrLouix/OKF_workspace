@@ -34,7 +34,7 @@ function setup(overrides = {}) {
     setCurrentPage: vi.fn(),
     activePDFRef: bundleConfig.pdfs[0],
     meta: {},
-    addPDF: vi.fn(),
+    addPDF: vi.fn().mockResolvedValue('mock-pdf-id'),
     ...overrides,
   };
   const utils = render(<PDFPanel {...props} />);

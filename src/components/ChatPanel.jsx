@@ -98,23 +98,80 @@ Que souhaitez-vous faire ?`
 
     // -- 3. APPEL LLM
     try {
+      // Build request body based on provider
+      const isMistral = LLM_API_URL.includes('mistral.ai');
+      const isAnthropic = LLM_API_URL.includes('anthropic.com');
+      const isOpenAI = LLM_API_URL.includes('openai.com');
+      
+      let requestBody;
+      
+      if (isAnthropic) {
+        // Anthropic format: system as separate field, messages without system role
+        requestBody = {
+          model: LLM_MODEL,
+          max_tokens: 2000,
+          system: systemPrompt,
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+        };
+      } else if (isMistral || isOpenAI) {
+        // Mistral/OpenAI format: system as first message in messages array
+        requestBody = {
+          model: LLM_MODEL,
+          max_tokens: 2000,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...newMessages.map(m => ({ role: m.role, content: m.content }))
+          ],
+        };
+      } else {
+        // Default: try Anthropic format first, then OpenAI
+        requestBody = {
+          model: LLM_MODEL,
+          max_tokens: 2000,
+          system: systemPrompt,
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+        };
+      }
+      
       const resp = await fetch(LLM_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(LLM_API_KEY ? { 'Authorization': `Bearer ${LLM_API_KEY}` } : {}),
         },
-        body: JSON.stringify({
-          model: LLM_MODEL,
-          max_tokens: 2000,
-          system: systemPrompt,
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-        }),
+        body: JSON.stringify(requestBody),
       });
       
+      if (!resp.ok) {
+        const errorData = await resp.json().catch(() => ({}));
+        const errorMsg = errorData.message || errorData.error?.message || resp.statusText;
+        throw new Error(`HTTP ${resp.status}: ${errorMsg}`);
+      }
+      
       const data = await resp.json();
-      // Support both Anthropic and OpenAI response shapes
-      const text = data.content?.[0]?.text ?? data.choices?.[0]?.message?.content ?? 'Erreur de réponse.';
+      
+      // Check for API error responses
+      if (data.error || data.message) {
+        throw new Error(data.error?.message || data.message || 'Erreur API');
+      }
+      
+      // Parse response based on provider
+      let text;
+      if (isMistral) {
+        // Mistral response: { choices: [{ message: { content: "..." } }] }
+        text = data.choices?.[0]?.message?.content;
+      } else if (isAnthropic) {
+        // Anthropic response: { content: [{ text: "..." }] }
+        text = data.content?.[0]?.text;
+      } else {
+        // OpenAI response: { choices: [{ message: { content: "..." } }] }
+        text = data.choices?.[0]?.message?.content;
+      }
+      
+      if (!text) {
+        console.error('Failed to parse LLM response:', data);
+        throw new Error(`Format de réponse inattendu. Données reçues: ${JSON.stringify(data).substring(0, 200)}`);
+      }
 
       // Parse edits if present
       const editsMatch = text.match(/<EDITS>([\s\S]*?)<\/EDITS>/);

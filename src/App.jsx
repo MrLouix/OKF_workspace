@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from "react";
-import { C, RAG_API_URL } from "./constants";
+import { C, RAG_API_URL, SAMPLE_GENERIC_INDEX, SAMPLE_GENERIC_LOG } from "./constants";
+import { exportAllAsZIP } from "./utils/bundleStorage";
 import { useBundle } from "./hooks/useBundle";
 import Header from "./components/Header";
 import PDFPanel from "./components/PDFPanel";
@@ -14,7 +15,7 @@ import InitializerModal from "./components/InitializerModal";
 export default function OKFWorkspace() {
   const bundle = useBundle();
   const {
-    bundleConfig, activeOKF, pdfFiles, activePDFId, activePDFRef,
+    bundleConfig, okfFiles, activeOKF, pdfFiles, activePDFId, activePDFRef,
     currentPage, indexContent, logContent, layout, readOnly, showInitializer, meta,
     setBundleConfig, setOkfFiles, setPdfFiles, setActiveOKFId, setActivePDFId,
     setCurrentPage, setIndexContent, setLogContent, setLayout, setReadOnly, setShowInitializer,
@@ -36,6 +37,10 @@ export default function OKFWorkspace() {
     saveOKFFile({ ...activeOKF, content: newContent });
   }, [activeOKF, saveOKFFile]);
 
+  const handleExportAllAsZIP = useCallback(() => {
+    exportAllAsZIP(bundleConfig, okfFiles, indexContent, logContent);
+  }, [bundleConfig, okfFiles, indexContent, logContent]);
+
   const handleCreateBundle = useCallback(({ bundleConfig: newBundle, okfFiles: newOkfFiles, pdfFiles: newPdfFiles }) => {
     setBundleConfig(newBundle);
     setOkfFiles(newOkfFiles);
@@ -43,8 +48,10 @@ export default function OKFWorkspace() {
     setPdfFiles(newPdfFiles);
     // Leave activePDFId unset — PDFPanel selects the new bundle's first PDF automatically.
     setActivePDFId(null);
+    setIndexContent(SAMPLE_GENERIC_INDEX);
+    setLogContent(SAMPLE_GENERIC_LOG);
     setShowInitializer(false);
-  }, [setBundleConfig, setOkfFiles, setActiveOKFId, setPdfFiles, setActivePDFId, setShowInitializer]);
+  }, [setBundleConfig, setOkfFiles, setActiveOKFId, setPdfFiles, setActivePDFId, setIndexContent, setLogContent, setShowInitializer]);
 
   const colW = {
     "3col":      ["1fr", "1fr", "1fr"],
@@ -84,8 +91,13 @@ export default function OKFWorkspace() {
             <SideFiles
               indexContent={indexContent}
               logContent={logContent}
+              okfContent={activeOKF?.content || ''}
+              meta={meta}
+              bundleConfig={bundleConfig}
               onIndexChange={setIndexContent}
               onLogChange={setLogContent}
+              onOKFChange={handleOKFContentChange}
+              onExportZIP={handleExportAllAsZIP}
               readOnly={readOnly}
             />
           </div>
