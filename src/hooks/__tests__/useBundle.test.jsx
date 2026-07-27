@@ -390,3 +390,109 @@ describe('openBundleFromDisk', () => {
     expect(result.current.bundleConfig).toBe(bundleConfigBefore);
   });
 });
+
+describe('live disk autosave (saveStatus)', () => {
+  async function connectToDisk(result) {
+    const dirHandle = { kind: 'directory', name: 'my-folder' };
+    fsAccess.pickDirectory.mockResolvedValue(dirHandle);
+    fsAccess.verifyPermission.mockResolvedValue(true);
+    fsAccess.listMarkdownFiles.mockResolvedValue([]);
+    await act(async () => {
+      await result.current.openBundleFromDisk();
+    });
+    return dirHandle;
+  }
+
+  it('does not write to disk or touch saveStatus when no folder is connected', () => {
+    const { result } = renderHook(() => useBundle());
+    act(() => {
+      result.current.saveOKFFile({ id: 'OKF-1', title: 'T', content: 'content' });
+    });
+    expect(result.current.saveStatus['OKF-1']).toBeUndefined();
+    expect(fsAccess.getOrCreateFileHandle).not.toHaveBeenCalled();
+    expect(fsAccess.writeFileAtomic).not.toHaveBeenCalled();
+  });
+
+  it('transitions saveStatus idle -> saving -> saved and writes the fiche atomically on a successful debounced write', async () => {
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useBundle());
+      const dirHandle = await connectToDisk(result);
+      fsAccess.getOrCreateFileHandle.mockResolvedValue({ kind: 'file', name: 'OKF-1.md' });
+      fsAccess.writeFileAtomic.mockResolvedValue(undefined);
+
+      expect(result.current.saveStatus['OKF-1']).toBeUndefined();
+
+      await act(async () => {
+        result.current.saveOKFFile({ id: 'OKF-1', title: 'T', content: 'content v1' });
+        // Let the internal async file-handle lookup settle before proceeding.
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current.saveStatus['OKF-1']).toBe('saving');
+      expect(fsAccess.writeFileAtomic).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+
+      expect(fsAccess.writeFileAtomic).toHaveBeenCalledWith(dirHandle, 'OKF-1.md', 'content v1');
+      expect(result.current.saveStatus['OKF-1']).toBe('saved');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('transitions saveStatus to error when the debounced write rejects', async () => {
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useBundle());
+      await connectToDisk(result);
+      fsAccess.getOrCreateFileHandle.mockResolvedValue({ kind: 'file', name: 'OKF-1.md' });
+      fsAccess.writeFileAtomic.mockRejectedValue(new Error('disk full'));
+
+      await act(async () => {
+        result.current.saveOKFFile({ id: 'OKF-1', title: 'T', content: 'content' });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+
+      expect(result.current.saveStatus['OKF-1']).toBe('error');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('writes index.md through when setIndexContent is called while connected', async () => {
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useBundle());
+      const dirHandle = await connectToDisk(result);
+      fsAccess.getOrCreateFileHandle.mockResolvedValue({ kind: 'file', name: 'index.md' });
+      fsAccess.writeFileAtomic.mockResolvedValue(undefined);
+
+      await act(async () => {
+        result.current.setIndexContent('new index content');
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current.indexContent).toBe('new index content');
+      expect(result.current.saveStatus.index).toBe('saving');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+
+      expect(fsAccess.writeFileAtomic).toHaveBeenCalledWith(dirHandle, 'index.md', 'new index content');
+      expect(result.current.saveStatus.index).toBe('saved');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
