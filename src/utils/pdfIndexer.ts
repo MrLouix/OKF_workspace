@@ -17,6 +17,56 @@ let pdfjsLib: any = null;
 // Flag to track if PDF.js is being loaded
 let pdfjsLoadingPromise: Promise<any> | null = null;
 
+// Tracks whether the Qdrant collection has already been verified/created
+let collectionReady: Promise<void> | null = null;
+
+/** Reset the cached collection-ready promise (for tests). */
+export function _resetCollectionReady(): void {
+  collectionReady = null;
+}
+
+/**
+ * Ensure the Qdrant collection exists, creating it if necessary.
+ * Uses mistral-embed dimension (1024) with cosine distance.
+ * The result is cached so the check only runs once per session.
+ */
+export function ensureCollection(): Promise<void> {
+  if (!RAG_API_URL || !QDRANT_COLLECTION) {
+    return Promise.resolve();
+  }
+  if (collectionReady) return collectionReady;
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (RAG_API_KEY) headers["Authorization"] = `Bearer ${RAG_API_KEY}`;
+
+  collectionReady = fetch(`${RAG_API_URL}/collections/${QDRANT_COLLECTION}`, { headers })
+    .then(resp => {
+      if (resp.ok) return; // collection already exists
+      if (resp.status !== 404) throw new Error(`Qdrant GET collection error: HTTP ${resp.status}`);
+
+      // Collection does not exist — create it
+      return fetch(`${RAG_API_URL}/collections/${QDRANT_COLLECTION}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          vectors: { size: 1024, distance: "Cosine" }
+        }),
+      }).then(createResp => {
+        if (!createResp.ok) {
+          throw new Error(`Qdrant create collection error: HTTP ${createResp.status}`);
+        }
+        console.log(`Qdrant collection "${QDRANT_COLLECTION}" created (1024-dim, cosine).`);
+      });
+    })
+    .catch(err => {
+      // Reset so next call can retry
+      collectionReady = null;
+      throw err;
+    });
+
+  return collectionReady;
+}
+
 /**
  * Get PDF.js library, loading from CDN if not already loaded
  * @returns Promise resolving to PDF.js library
@@ -34,16 +84,20 @@ function getPdfjs() {
   if (typeof window !== 'undefined' && !window.location.href.includes('jsdom')) {
     pdfjsLoadingPromise = new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js';
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
       script.onload = () => {
         // @ts-ignore
         pdfjsLib = window.pdfjsLib;
         if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js';
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
         resolve(pdfjsLib);
       };
-      script.onerror = reject;
+      script.onerror = () => {
+        // Reset so a subsequent call can retry
+        pdfjsLoadingPromise = null;
+        reject(new Error('Failed to load PDF.js from CDN'));
+      };
       document.head.appendChild(script);
     });
   } else {
@@ -188,6 +242,7 @@ export async function pdfExistsInQdrant(pdfName: string): Promise<boolean> {
   }
   
   try {
+    await ensureCollection();
     const searchEndpoint = `${RAG_API_URL}/collections/${QDRANT_COLLECTION}/points/scroll`;
     const searchHeaders: Record<string, string> = {
       "Content-Type": "application/json",
@@ -323,6 +378,7 @@ export async function removePDFFromQdrant(pdfName: string): Promise<void> {
   }
   
   try {
+    await ensureCollection();
     // Find all points with this ref
     const searchEndpoint = `${RAG_API_URL}/collections/${QDRANT_COLLECTION}/points/scroll`;
     const searchHeaders: Record<string, string> = {

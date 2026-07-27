@@ -126,7 +126,7 @@ describe('saveBundle / loadBundle round trip', () => {
 });
 
 describe('importBundleFromZIP', () => {
-  it('rejects since ZIP import is not implemented', async () => {
-    await expect(importBundleFromZIP(new File([''], 'x.zip'))).rejects.toThrow(/not implemented/);
+  it('rejects on invalid ZIP data', async () => {
+    await expect(importBundleFromZIP(new File([''], 'x.zip'))).rejects.toThrow(/Corrupted zip/);
   });
 });

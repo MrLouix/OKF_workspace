@@ -11,6 +11,7 @@ import {
   QDRANT_COLLECTION,
   MISTRAL_EMBEDDINGS_URL
 } from '../constants';
+import { ensureCollection } from './pdfIndexer';
 
 /**
  * Mistral API Key for embeddings (from environment)
@@ -152,6 +153,9 @@ export async function fetchRagChunks(
   const pages = meta?.pages || meta?.pages_pdf || null;
   
   try {
+    // 0. Ensure Qdrant collection exists
+    await ensureCollection();
+
     // 1. Get embedding for the query
     const queryEmbedding = await getMistralEmbedding(userMessage);
     

@@ -91,12 +91,9 @@ export default function OKFWorkspace() {
             <SideFiles
               indexContent={indexContent}
               logContent={logContent}
-              okfContent={activeOKF?.content || ''}
-              meta={meta}
               bundleConfig={bundleConfig}
               onIndexChange={setIndexContent}
               onLogChange={setLogContent}
-              onOKFChange={handleOKFContentChange}
               onExportZIP={handleExportAllAsZIP}
               readOnly={readOnly}
             />

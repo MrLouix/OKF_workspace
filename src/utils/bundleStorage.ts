@@ -20,7 +20,9 @@ function uniqueSuffix(): string {
  */
 export function saveBundle(
   bundleConfig: BundleConfig | null,
-  okfFiles: OKFFile[]
+  okfFiles: OKFFile[],
+  indexContent: string,
+  logContent: string
 ): void {
   if (!bundleConfig) {
     console.warn('Cannot save bundle: bundleConfig is null');
@@ -33,17 +35,32 @@ export function saveBundle(
     files: okfFiles
   };
   
-  const jsonString = JSON.stringify(bundleJSON, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
+  const zip = new JSZip();
   
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${bundleConfig.name.replace(/[^a-z0-9]/gi, '_')}_bundle.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Add bundle.json
+  zip.file('bundle.json', JSON.stringify(bundleJSON, null, 2));
+  
+  // Add index.md and log.md
+  if (indexContent) zip.file('index.md', indexContent);
+  if (logContent) zip.file('log.md', logContent);
+  
+  // Add individual .md files for each OKF fiche
+  okfFiles.forEach(okfFile => {
+    const fileName = `fiches/${okfFile.id || `fiche-${Date.now()}`}.md`;
+    zip.file(fileName, okfFile.content);
+  });
+  
+  // Generate and download ZIP
+  zip.generateAsync({ type: 'blob' }).then((content: Blob) => {
+    const url = URL.createObjectURL(content);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${bundleConfig.name.replace(/[^a-z0-9]/gi, '_')}_bundle.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
 }
 
 /**
@@ -267,11 +284,55 @@ export function exportAllAsZIP(
 }
 
 /**
- * Import bundle from ZIP file (placeholder)
+ * Import bundle from ZIP file
+ * Extracts bundle.json, index.md, and log.md from the ZIP
  * @param file - ZIP file
- * @returns Promise - Would resolve to bundle data
+ * @returns Promise resolving to { bundleConfig, okfFiles, indexContent?, logContent? }
  */
-export function importBundleFromZIP(file: File): Promise<any> {
-  console.warn('ZIP import not yet implemented - would require JSZip library');
-  return Promise.reject(new Error('ZIP import not implemented'));
+export function importBundleFromZIP(file: File): Promise<{
+  bundleConfig: BundleConfig;
+  okfFiles: OKFFile[];
+  indexContent?: string;
+  logContent?: string;
+}> {
+  return file.arrayBuffer().then(buf => JSZip.loadAsync(buf)).then(async (zip) => {
+    // Extract and parse bundle.json (required)
+    const bundleJsonFile = zip.file('bundle.json');
+    if (!bundleJsonFile) {
+      throw new Error('Invalid ZIP: missing bundle.json');
+    }
+    const bundleJsonStr = await bundleJsonFile.async('string');
+    const data: BundleJSON = JSON.parse(bundleJsonStr);
+    
+    if (!data.bundle || !data.files) {
+      throw new Error('Invalid bundle format: missing bundle or files');
+    }
+    if (data.version !== "1.0") {
+      console.warn(`Bundle version ${data.version} may not be compatible`);
+    }
+    
+    const result: {
+      bundleConfig: BundleConfig;
+      okfFiles: OKFFile[];
+      indexContent?: string;
+      logContent?: string;
+    } = {
+      bundleConfig: data.bundle,
+      okfFiles: data.files
+    };
+    
+    // Extract index.md if present
+    const indexFile = zip.file('index.md');
+    if (indexFile) {
+      result.indexContent = await indexFile.async('string');
+    }
+    
+    // Extract log.md if present
+    const logFile = zip.file('log.md');
+    if (logFile) {
+      result.logContent = await logFile.async('string');
+    }
+    
+    return result;
+  });
 }

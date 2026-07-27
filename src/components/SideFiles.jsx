@@ -13,16 +13,13 @@ import { C, btnStyle } from '../constants';
 export default function SideFiles({ 
   indexContent, 
   logContent, 
-  okfContent,
-  meta,
   bundleConfig,
   onIndexChange, 
   onLogChange,
-  onOKFChange,
   onExportZIP,
   readOnly 
 }) {
-  const [active, setActive] = useState('okf');
+  const [active, setActive] = useState('index');
   const fileInputRef = React.useRef(null);
 
   // ==========================================================================
@@ -64,7 +61,7 @@ export default function SideFiles({
         flexShrink: 0,
         overflowX: 'auto'
       }}>
-        {[['okf', '📝 fiche.md'], ['index', '📋 index.md'], ['log', '📒 log.md']].map(([key, label]) => (
+        {[['index', '📋 index.md'], ['log', '📒 log.md']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActive(key)}
@@ -94,9 +91,7 @@ export default function SideFiles({
                 accept=".md"
                 style={{ display: 'none' }}
                 onChange={handleFileLoad(
-                  active === 'index' ? onIndexChange : 
-                  active === 'log' ? onLogChange : 
-                  onOKFChange
+                  active === 'index' ? onIndexChange : onLogChange
                 )}
                 ref={fileInputRef}
               />
@@ -104,12 +99,8 @@ export default function SideFiles({
           )}
           <button
             onClick={() => handleFileSave(
-              active === 'index' ? 'index.md' : 
-              active === 'log' ? 'log.md' : 
-              `${meta?.id || 'fiche'}.md`,
-              active === 'index' ? indexContent : 
-              active === 'log' ? logContent : 
-              okfContent || ''
+              active === 'index' ? 'index.md' : 'log.md',
+              active === 'index' ? indexContent : logContent
             )}
             style={{ ...btnStyle('ghost'), padding: '2px 6px', fontSize: 10 }}
             title="Télécharger ce fichier"
@@ -131,14 +122,10 @@ export default function SideFiles({
       {/* Content */}
       <textarea
         value={
-          active === 'index' ? indexContent || '' : 
-          active === 'log' ? logContent || '' : 
-          okfContent || ''
+          active === 'index' ? indexContent || '' : logContent || ''
         }
         onChange={e => !readOnly && (
-          active === 'index' ? onIndexChange : 
-          active === 'log' ? onLogChange : 
-          onOKFChange
+          active === 'index' ? onIndexChange : onLogChange
         )(e.target.value)}
         readOnly={readOnly}
         style={{

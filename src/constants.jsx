@@ -343,7 +343,7 @@ export const Icon = {
 export function btnStyle(variant) {
   const base = {
     display: "inline-flex", alignItems: "center", gap: 5,
-    border: "1px solid", borderRadius: 6, cursor: "pointer",
+    borderWidth: 1, borderStyle: "solid", borderRadius: 6, cursor: "pointer",
     fontSize: 12, fontFamily: "system-ui", padding: "4px 10px",
     transition: "all .15s", whiteSpace: "nowrap",
   };

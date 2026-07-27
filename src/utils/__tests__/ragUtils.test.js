@@ -7,6 +7,7 @@ import {
   getRagStatus,
   getRagIndicatorLabel,
 } from '../ragUtils';
+import { _resetCollectionReady } from '../pdfIndexer';
 
 const bundleConfig = {
   pdfs: [
@@ -47,6 +48,7 @@ describe('fetchRagChunks', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    _resetCollectionReady();
     vi.doUnmock('../../constants');
     vi.resetModules();
   });
@@ -105,8 +107,8 @@ describe('fetchRagChunks', () => {
       }
     ];
     
-    // Mock both API calls
-    global.fetch = vi.fn().mockImplementation(async (url) => {
+    // Mock all API calls (including ensureCollection GET)
+    global.fetch = vi.fn().mockImplementation(async (url, opts) => {
       if (url.includes('embeddings')) {
         // Mistral embeddings API
         return {
@@ -119,6 +121,9 @@ describe('fetchRagChunks', () => {
           ok: true,
           json: async () => ({ result: { points: mockQdrantPoints } }),
         };
+      } else if (url.includes('/collections/') && (!opts || opts.method === undefined || opts.method === 'GET')) {
+        // ensureCollection check — collection exists
+        return { ok: true, json: async () => ({ result: {} }) };
       }
       return { ok: false };
     });

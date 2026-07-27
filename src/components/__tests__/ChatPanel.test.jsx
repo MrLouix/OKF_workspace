@@ -105,7 +105,7 @@ describe('ChatPanel — RAG disabled (mocked empty RAG_API_URL)', () => {
 
     fireEvent.click(screen.getByText(/Appliquer les modifications/));
     expect(onApplyEdit).toHaveBeenCalledWith(editsPayload);
-    expect(await screen.findByText(/Modifications appliquées/)).toBeInTheDocument();
+    expect(await screen.findByText(/✅ Modifications appliquées/)).toBeInTheDocument();
   });
 
   it('disables applying edits in read-only mode and does not call onApplyEdit', async () => {
@@ -167,6 +167,10 @@ describe('ChatPanel — RAG enabled (mocked Qdrant)', () => {
           })
         });
       }
+      if (url.includes('/collections/')) {
+        // ensureCollection check — collection exists
+        return Promise.resolve({ ok: true, json: async () => ({ result: {} }) });
+      }
       return Promise.resolve({ ok: true, json: async () => ({ content: [{ text: 'Réponse basée sur les extraits.' }] }) });
     });
     vi.stubGlobal('fetch', mockFetch);
@@ -178,16 +182,17 @@ describe('ChatPanel — RAG enabled (mocked Qdrant)', () => {
 
     await waitFor(() => expect(screen.getByText('Réponse basée sur les extraits.')).toBeInTheDocument());
 
-    // Mistral embeddings, Qdrant search, and LLM endpoint were all called
-    expect(mockFetch).toHaveBeenCalledTimes(3);
+    // ensureCollection, Mistral embeddings, Qdrant search, and LLM endpoint were all called
+    expect(mockFetch).toHaveBeenCalledTimes(4);
     
     // Verify Qdrant was called with correct endpoint
     const qdrantCall = mockFetch.mock.calls.find(call => call[0].includes('collections/okf_documents/points/search'));
     expect(qdrantCall).toBeDefined();
-    expect(mockFetch.mock.calls[2][0]).toBe(LLM_API_URL);
+    const llmCall = mockFetch.mock.calls.find(call => call[0] === LLM_API_URL);
+    expect(llmCall).toBeDefined();
 
     // The chunk content made it into the LLM system prompt
-    const llmBody = JSON.parse(mockFetch.mock.calls[2][1].body);
+    const llmBody = JSON.parse(llmCall[1].body);
     expect(llmBody.system).toContain('ISO_9001_2015.pdf');
     expect(llmBody.system).toContain('Exigence de traçabilité détaillée.');
 
@@ -221,6 +226,9 @@ describe('ChatPanel — RAG enabled (mocked Qdrant)', () => {
       if (url.includes('collections/okf_documents/points/search')) {
         return Promise.resolve({ ok: true, json: async () => ({ result: { points: [] } }) });
       }
+      if (url.includes('/collections/')) {
+        return Promise.resolve({ ok: true, json: async () => ({ result: {} }) });
+      }
       return Promise.resolve({ ok: true, json: async () => ({ content: [{ text: 'ok' }] }) });
     });
     vi.stubGlobal('fetch', mockFetch);
@@ -239,7 +247,7 @@ describe('ChatPanel — RAG enabled (mocked Qdrant)', () => {
     render(<MockedChatPanel {...multiPdfProps} onApplyEdit={vi.fn()} />);
     sendChatMessage('Compare les deux normes');
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(4));
 
     // Find Qdrant call and verify filter contains both PDFs
     const qdrantCall = mockFetch.mock.calls.find(call => call[0].includes('collections/okf_documents/points/search'));

@@ -5,6 +5,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { parseFrontMatter } from '../utils/parseFrontMatter';
 import { indexPDFInQdrant, removePDFFromQdrant } from '../utils/pdfIndexer';
+import { saveBundle as saveBundleToZIP, importBundleFromZIP } from '../utils/bundleStorage';
 import { SAMPLE_BUNDLE_CONFIG, SAMPLE_OKF_FILES, SAMPLE_GENERIC_INDEX, SAMPLE_GENERIC_LOG } from '../constants';
 
 /**
@@ -86,40 +87,49 @@ export function useBundle() {
   }, []);
 
   /**
-   * Load a bundle from file
+   * Load a bundle from file (supports both .zip and .json)
    */
   const loadBundle = useCallback(async (file) => {
     try {
-      const reader = new FileReader();
-      return new Promise((resolve, reject) => {
-        reader.onload = (e) => {
-          try {
-            const data = JSON.parse(e.target.result);
-            
-            // Validate bundle format
-            if (!data.bundle || !data.files) {
-              throw new Error('Invalid bundle format');
+      const isZip = file.name.toLowerCase().endsWith('.zip');
+      
+      if (isZip) {
+        const result = await importBundleFromZIP(file);
+        setBundleConfig(result.bundleConfig);
+        setOkfFiles(result.okfFiles);
+        setActiveOKFId(result.okfFiles[0]?.id || null);
+        setPdfFiles({});
+        setActivePDFId(null);
+        setIndexContent(result.indexContent || SAMPLE_GENERIC_INDEX);
+        setLogContent(result.logContent || SAMPLE_GENERIC_LOG);
+        setShowInitializer(false);
+      } else {
+        // Legacy JSON support
+        const reader = new FileReader();
+        return new Promise((resolve, reject) => {
+          reader.onload = (e) => {
+            try {
+              const data = JSON.parse(e.target.result);
+              if (!data.bundle || !data.files) {
+                throw new Error('Invalid bundle format');
+              }
+              setBundleConfig(data.bundle);
+              setOkfFiles(data.files);
+              setActiveOKFId(data.files[0]?.id || null);
+              setPdfFiles({});
+              setActivePDFId(null);
+              setIndexContent(SAMPLE_GENERIC_INDEX);
+              setLogContent(SAMPLE_GENERIC_LOG);
+              setShowInitializer(false);
+              resolve();
+            } catch (err) {
+              reject(err);
             }
-            
-            setBundleConfig(data.bundle);
-            setOkfFiles(data.files);
-            setActiveOKFId(data.files[0]?.id || null);
-            // Clear any PDFs loaded for a previously active bundle — a
-            // loaded bundle.json only carries PDF references, not the
-            // actual blobs, so stale entries would otherwise linger.
-            setPdfFiles({});
-            setActivePDFId(null);
-            setIndexContent(SAMPLE_GENERIC_INDEX);
-            setLogContent(SAMPLE_GENERIC_LOG);
-            setShowInitializer(false);
-            resolve();
-          } catch (err) {
-            reject(err);
-          }
-        };
-        reader.onerror = reject;
-        reader.readAsText(file);
-      });
+          };
+          reader.onerror = reject;
+          reader.readAsText(file);
+        });
+      }
     } catch (err) {
       console.error('Failed to load bundle:', err);
       throw err;
@@ -127,25 +137,11 @@ export function useBundle() {
   }, []);
 
   /**
-   * Save current bundle to file
+   * Save current bundle to ZIP file
    */
   const saveBundle = useCallback(() => {
-    if (!bundleConfig) return;
-    
-    const bundleJSON = {
-      version: "1.0",
-      bundle: bundleConfig,
-      files: okfFiles
-    };
-    
-    const blob = new Blob([JSON.stringify(bundleJSON, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${bundleConfig.name || 'bundle'}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [bundleConfig, okfFiles]);
+    saveBundleToZIP(bundleConfig, okfFiles, indexContent, logContent);
+  }, [bundleConfig, okfFiles, indexContent, logContent]);
 
   /**
    * Add a PDF file to the bundle and index it in Qdrant
@@ -269,18 +265,22 @@ export function useBundle() {
   }, [activeOKFId]);
 
   /**
-   * Apply edits from LLM (for backward compatibility)
+   * Apply edits from LLM.
+   * Uses the functional form of setOkfFiles so we always read the
+   * latest okfFiles / activeOKFId – no stale-closure risk.
    */
   const applyEdits = useCallback(({ fiche, index, log }) => {
     if (fiche) {
-      // If we have okfFiles, update the active one
-      if (activeOKF) {
-        saveOKFFile({ ...activeOKF, content: fiche });
-      }
+      setOkfFiles(prev => {
+        const idx = prev.findIndex(f => f.id === activeOKFId);
+        if (idx < 0) return prev;
+        const updated = { ...prev[idx], content: fiche };
+        return [...prev.slice(0, idx), updated, ...prev.slice(idx + 1)];
+      });
     }
     if (index) setIndexContent(index);
     if (log) setLogContent(log);
-  }, [activeOKF, saveOKFFile]);
+  }, [activeOKFId]);
 
   /**
    * Initialize with sample data

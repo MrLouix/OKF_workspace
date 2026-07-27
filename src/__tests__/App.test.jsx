@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import JSZip from 'jszip';
 import App from '../App';
 
 beforeAll(() => {
@@ -130,16 +131,25 @@ describe('App (composition root)', () => {
       fireEvent.change(okfTextarea, { target: { value: editedContent } });
       expect(document.querySelectorAll('textarea')[0].value).toBe(editedContent);
 
-      // Save via the Header button
+      // Save via the Header button (now produces a ZIP asynchronously)
       fireEvent.click(screen.getByText(/Sauvegarder/));
-      expect(capturedBlob).not.toBeNull();
-      const savedJson = await capturedBlob.text();
+
+      // Wait for the async ZIP generation to complete
+      await waitFor(() => {
+        expect(capturedBlob).not.toBeNull();
+      });
+
+      // Extract bundle.json from the ZIP
+      const zipBuf = await capturedBlob.arrayBuffer();
+      const zip = await JSZip.loadAsync(zipBuf);
+      const savedJson = await zip.file('bundle.json').async('string');
       const saved = JSON.parse(savedJson);
       expect(saved.bundle.name).toBe('Normes ISO 9001');
       expect(saved.files[0].content).toBe(editedContent);
 
-      // Load that exact file back in via the Header's "Charger" input
-      const file = new File([savedJson], 'bundle.json', { type: 'application/json' });
+      // Load that ZIP back in via the Header's "Charger" input
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const file = new File([zipBlob], 'bundle.zip', { type: 'application/zip' });
       fireEvent.change(screen.getByLabelText(/Charger/), { target: { files: [file] } });
 
       await waitFor(() => {

@@ -148,7 +148,7 @@ export default function Header({
           onClick={() => onSaveBundle?.()}
           disabled={!bundleConfig}
           style={{ ...btnStyle('secondary'), opacity: bundleConfig ? 1 : 0.5, cursor: bundleConfig ? 'pointer' : 'not-allowed' }}
-          title="Sauvegarder le bundle (bundle.json)"
+          title="Sauvegarder le bundle (ZIP)"
         >
           <Icon.save /> Sauvegarder
         </button>
@@ -156,13 +156,13 @@ export default function Header({
         {/* Load Bundle Button */}
         <label
           style={{ ...btnStyle('secondary'), cursor: 'pointer' }}
-          title="Charger un bundle (bundle.json)"
+          title="Charger un bundle (ZIP ou JSON)"
         >
           <Icon.upload /> Charger
           <input
             ref={loadInputRef}
             type="file"
-            accept=".json,application/json"
+            accept=".zip,.json,application/json"
             style={{ display: 'none' }}
             onChange={handleLoadChange}
           />
@@ -180,7 +180,8 @@ export default function Header({
             fontSize: 11,
             fontFamily: 'monospace',
             cursor: 'pointer',
-            border: '1px solid',
+            borderWidth: 1,
+            borderStyle: 'solid',
             transition: 'all .2s',
             background: readOnly ? `${C.amber}22` : 'transparent',
             borderColor: readOnly ? C.amber : C.border,

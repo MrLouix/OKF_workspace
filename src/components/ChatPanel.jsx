@@ -50,6 +50,7 @@ Que souhaitez-vous faire ?`
   const [loading, setLoading] = useState(false);
   const [ragStatus, setRagStatus] = useState(RAG_API_URL ? 'idle' : 'disabled');
   const [lastChunks, setLastChunks] = useState([]);
+  const [appliedEdits, setAppliedEdits] = useState(new Set());
   const bottomRef = useRef(null);
 
   // ==========================================================================
@@ -179,9 +180,31 @@ Que souhaitez-vous faire ?`
       let displayText = text;
       if (editsMatch) {
         try {
-          edits = JSON.parse(editsMatch[1].trim());
+          // Strip markdown code fences the LLM may wrap around the JSON
+          let raw = editsMatch[1].trim();
+          raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+          edits = JSON.parse(raw);
           displayText = text.replace(/<EDITS>[\s\S]*?<\/EDITS>/, '').trim();
-        } catch {}
+        } catch {
+          // LLMs often produce unescaped newlines/tabs inside JSON string
+          // values. Escape them inside quoted strings and retry.
+          try {
+            let raw = editsMatch[1].trim();
+            raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+            // Escape literal control chars inside JSON string values
+            raw = raw.replace(/"((?:[^"\\]|\\.)*)"/gs, (match, inner) => {
+              const escaped = inner
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r')
+                .replace(/\t/g, '\\t');
+              return `"${escaped}"`;
+            });
+            edits = JSON.parse(raw);
+            displayText = text.replace(/<EDITS>[\s\S]*?<\/EDITS>/, '').trim();
+          } catch (retryErr) {
+            console.warn('Failed to parse <EDITS> block:', retryErr.message, '\nRaw:', editsMatch[1].substring(0, 500));
+          }
+        }
       }
 
       setMessages(prev => [...prev, { role: 'assistant', content: displayText, edits, chunks }]);
@@ -192,8 +215,9 @@ Que souhaitez-vous faire ?`
     setLoading(false);
   };
 
-  const applyEdits = (edits) => {
+  const applyEdits = (edits, msgIndex) => {
     onApplyEdit(edits);
+    setAppliedEdits(prev => new Set(prev).add(msgIndex));
     setMessages(prev => [...prev, {
       role: 'assistant',
       content: `✅ Modifications appliquées :\n${edits.summary || 'Fichiers mis à jour.'}`
@@ -351,18 +375,18 @@ Que souhaitez-vous faire ?`
                 )}
               </div>
               <button
-                onClick={() => applyEdits(msg.edits)}
-                disabled={readOnly}
+                onClick={() => applyEdits(msg.edits, i)}
+                disabled={readOnly || appliedEdits.has(i)}
                 style={{
                   ...btnStyle('primary'),
                   marginTop: 8,
                   width: '100%',
                   justifyContent: 'center',
-                  opacity: readOnly ? 0.4 : 1,
-                  cursor: readOnly ? 'not-allowed' : 'pointer'
+                  opacity: (readOnly || appliedEdits.has(i)) ? 0.4 : 1,
+                  cursor: (readOnly || appliedEdits.has(i)) ? 'not-allowed' : 'pointer'
                 }}
               >
-                {readOnly ? '🔒 Modifications désactivées' : <><Icon.check /> Appliquer les modifications</>}
+                {readOnly ? '🔒 Modifications désactivées' : appliedEdits.has(i) ? <><Icon.check /> Modifications appliquées</> : <><Icon.check /> Appliquer les modifications</>}
               </button>
             </div>
           )}
