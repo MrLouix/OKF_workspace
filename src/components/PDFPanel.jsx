@@ -15,15 +15,16 @@ import { C, btnStyle, Icon } from '../constants';
  * - Page range display from metadata
  * - Generic text (no RCC-M references)
  */
-export default function PDFPanel({ 
-  bundleConfig, 
-  pdfFiles, 
-  activePDFId, 
+export default function PDFPanel({
+  bundleConfig,
+  pdfFiles,
+  activePDFId,
   setActivePDFById,
-  currentPage, 
+  currentPage,
   setCurrentPage,
   activePDFRef,
-  meta
+  meta,
+  addPDF
 }) {
   const fileInputRef = React.useRef(null);
   
@@ -77,12 +78,19 @@ export default function PDFPanel({
   const handleFileLoad = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
-    // For backward compatibility (non-bundle mode)
-    const url = URL.createObjectURL(file);
-    setPdfUrl(url);
-    setPdfFile(file.name);
-    setCurrentPage(1);
+
+    if (isBundleMode && addPDF) {
+      // Add as a new tab in the bundle rather than silently overriding
+      // whichever tab currently has no blob loaded.
+      addPDF(file);
+    } else {
+      // Legacy/back-compat mode: no bundle configured yet
+      const url = URL.createObjectURL(file);
+      setPdfUrl(url);
+      setPdfFile(file.name);
+      setCurrentPage(1);
+    }
+    e.target.value = '';
   };
   
   const handleAddPDF = () => {

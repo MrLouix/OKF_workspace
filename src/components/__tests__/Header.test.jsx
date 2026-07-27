@@ -46,7 +46,9 @@ describe('Header — bundle save/load wiring', () => {
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     expect(onLoadBundle).toHaveBeenCalledTimes(1);
-    expect(onLoadBundle).toHaveBeenCalledWith(file);
+    // Compare by name rather than deep-equality on the File object itself —
+    // jsdom's File instances don't play well with vitest's deep-equal walk.
+    expect(onLoadBundle.mock.calls[0][0].name).toBe('bundle.json');
   });
 
   it('logs an error instead of throwing when onLoadBundle rejects', async () => {

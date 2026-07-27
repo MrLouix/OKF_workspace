@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import App from '../App';
 
@@ -107,5 +107,46 @@ describe('App (composition root)', () => {
     expect(screen.getByText('doc.pdf')).toBeInTheDocument();
     // The old sample bundle content is gone
     expect(screen.queryByText('Normes ISO 9001')).not.toBeInTheDocument();
+  });
+
+  describe('bundle save -> load round trip through the Header controls', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('preserves an in-progress edit across a real save then load', async () => {
+      let capturedBlob = null;
+      global.URL.createObjectURL = vi.fn((blob) => {
+        capturedBlob = blob;
+        return 'blob:mock-save-url';
+      });
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+      render(<App />);
+
+      // OKFPanel's raw-content textarea renders before SideFiles' in the DOM
+      const okfTextarea = document.querySelectorAll('textarea')[0];
+      const editedContent = okfTextarea.value + '\n\nEdited by round-trip test.';
+      fireEvent.change(okfTextarea, { target: { value: editedContent } });
+      expect(document.querySelectorAll('textarea')[0].value).toBe(editedContent);
+
+      // Save via the Header button
+      fireEvent.click(screen.getByText(/Sauvegarder/));
+      expect(capturedBlob).not.toBeNull();
+      const savedJson = await capturedBlob.text();
+      const saved = JSON.parse(savedJson);
+      expect(saved.bundle.name).toBe('Normes ISO 9001');
+      expect(saved.files[0].content).toBe(editedContent);
+
+      // Load that exact file back in via the Header's "Charger" input
+      const file = new File([savedJson], 'bundle.json', { type: 'application/json' });
+      fireEvent.change(screen.getByLabelText(/Charger/), { target: { files: [file] } });
+
+      await waitFor(() => {
+        expect(document.querySelectorAll('textarea')[0].value).toBe(editedContent);
+      });
+      expect(screen.getByText('Normes ISO 9001')).toBeInTheDocument();
+      expect(screen.getAllByText('OKF-2026-001').length).toBeGreaterThan(0);
+    });
   });
 });

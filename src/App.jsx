@@ -18,7 +18,7 @@ export default function OKFWorkspace() {
     currentPage, indexContent, logContent, layout, readOnly, showInitializer, meta,
     setBundleConfig, setOkfFiles, setPdfFiles, setActiveOKFId, setActivePDFId,
     setCurrentPage, setIndexContent, setLogContent, setLayout, setReadOnly, setShowInitializer,
-    setActivePDFById, saveOKFFile, applyEdits, initWithSampleData, saveBundle, loadBundle,
+    setActivePDFById, saveOKFFile, applyEdits, initWithSampleData, saveBundle, loadBundle, addPDF,
   } = bundle;
 
   // Seed the workspace with the sample bundle on first load so there is
@@ -101,6 +101,7 @@ export default function OKFWorkspace() {
             setCurrentPage={setCurrentPage}
             activePDFRef={activePDFRef}
             meta={meta}
+            addPDF={addPDF}
           />
         </div>
 
