@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useBundle, generateId, getPDFRefByName, getOKFById } from '../useBundle';
 import * as fsAccess from '../../utils/fsAccess';
@@ -494,5 +494,122 @@ describe('live disk autosave (saveStatus)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('syncFromDisk', () => {
+  // fsAccess mocks are shared module-level vi.fn()s across the whole file;
+  // clear call history so assertions here aren't polluted by earlier tests.
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function makeHandles() {
+    return {
+      indexHandle: { kind: 'file', name: 'index.md' },
+      logHandle: { kind: 'file', name: 'log.md' },
+      okfHandle: { kind: 'file', name: 'OKF-1.md' },
+    };
+  }
+
+  async function connectToDisk(result, { indexHandle, logHandle, okfHandle }) {
+    const dirHandle = { kind: 'directory', name: 'sync-folder' };
+    fsAccess.pickDirectory.mockResolvedValue(dirHandle);
+    fsAccess.verifyPermission.mockResolvedValue(true);
+    fsAccess.listMarkdownFiles.mockResolvedValue([
+      { name: 'index.md', handle: indexHandle },
+      { name: 'log.md', handle: logHandle },
+      { name: 'OKF-1.md', handle: okfHandle },
+    ]);
+    fsAccess.readFileText.mockImplementation(async (handle) => {
+      if (handle === indexHandle) return 'index v1';
+      if (handle === logHandle) return 'log v1';
+      if (handle === okfHandle) return '---\nid: OKF-1\ntitle: T\n---\n\nbody v1';
+      throw new Error('unexpected handle');
+    });
+    await act(async () => {
+      await result.current.openBundleFromDisk();
+    });
+    return dirHandle;
+  }
+
+  it('does nothing when no disk folder is connected', async () => {
+    const { result } = renderHook(() => useBundle());
+    await act(async () => {
+      await result.current.syncFromDisk();
+    });
+    expect(fsAccess.readFileText).not.toHaveBeenCalled();
+  });
+
+  it('pulls external changes to index.md, log.md, and an OKF fiche into memory', async () => {
+    const handles = makeHandles();
+    const { result } = renderHook(() => useBundle());
+    await connectToDisk(result, handles);
+
+    expect(result.current.indexContent).toBe('index v1');
+    expect(result.current.logContent).toBe('log v1');
+    expect(result.current.okfFiles.find(f => f.id === 'OKF-1').content).toBe(
+      '---\nid: OKF-1\ntitle: T\n---\n\nbody v1'
+    );
+
+    // Simulate external edits made outside the app (e.g. another program).
+    fsAccess.readFileText.mockImplementation(async (handle) => {
+      if (handle === handles.indexHandle) return 'index v2 (external)';
+      if (handle === handles.logHandle) return 'log v2 (external)';
+      if (handle === handles.okfHandle) return '---\nid: OKF-1\ntitle: T\n---\n\nbody v2 (external)';
+      throw new Error('unexpected handle');
+    });
+
+    await act(async () => {
+      await result.current.syncFromDisk();
+    });
+
+    expect(result.current.indexContent).toBe('index v2 (external)');
+    expect(result.current.logContent).toBe('log v2 (external)');
+    expect(result.current.okfFiles.find(f => f.id === 'OKF-1').content).toBe(
+      '---\nid: OKF-1\ntitle: T\n---\n\nbody v2 (external)'
+    );
+  });
+
+  it('does not clobber a file that is currently mid-write (saveStatus "saving")', async () => {
+    const handles = makeHandles();
+    const { result } = renderHook(() => useBundle());
+    await connectToDisk(result, handles);
+
+    // Start (but never let settle) a local edit to index.md, leaving its
+    // saveStatus at 'saving' for the rest of this test.
+    await act(async () => {
+      result.current.setIndexContent('local pending edit');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.saveStatus.index).toBe('saving');
+
+    // Disk reports a different (stale/external) value at the same time —
+    // syncFromDisk must not overwrite the in-flight local edit.
+    fsAccess.readFileText.mockImplementation(async (handle) => {
+      if (handle === handles.indexHandle) return 'stale disk content';
+      if (handle === handles.logHandle) return 'log v1';
+      if (handle === handles.okfHandle) return '---\nid: OKF-1\ntitle: T\n---\n\nbody v1';
+      throw new Error('unexpected handle');
+    });
+
+    await act(async () => {
+      await result.current.syncFromDisk();
+    });
+
+    expect(result.current.indexContent).toBe('local pending edit');
+  });
+
+  it('leaves content untouched when disk content matches the in-memory copy', async () => {
+    const handles = makeHandles();
+    const { result } = renderHook(() => useBundle());
+    await connectToDisk(result, handles);
+
+    const indexBefore = result.current.indexContent;
+    await act(async () => {
+      await result.current.syncFromDisk();
+    });
+    expect(result.current.indexContent).toBe(indexBefore);
   });
 });

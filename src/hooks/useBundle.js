@@ -460,6 +460,48 @@ export function useBundle() {
   }, [activeOKFId, ensureFileHandleAndScheduleWrite, setIndexContent, setLogContent]);
 
   /**
+   * Re-reads every tracked file (index.md, log.md, each OKF fiche) from
+   * disk and, for any whose content has changed and isn't currently being
+   * written (saveStatus !== 'saving'), updates in-memory state to match.
+   * The File System Access API has no push/watch notification, so this is
+   * how external changes (e.g. edited in another program) make it back
+   * into the UI — disk is always the source of truth. No-ops when no disk
+   * folder is connected.
+   */
+  const syncFromDisk = useCallback(async () => {
+    if (!diskConnected) return;
+
+    for (const [fileName, handle] of Object.entries(fileHandles)) {
+      const key = fileName === 'index.md' ? 'index'
+        : fileName === 'log.md' ? 'log'
+        : fileName.replace(/\.md$/i, '');
+
+      if (saveStatus[key] === 'saving') continue;
+
+      let diskContent;
+      try {
+        diskContent = await fsAccess.readFileText(handle);
+      } catch (err) {
+        console.error(`Failed to read ${fileName} from disk during sync:`, err);
+        continue;
+      }
+
+      if (fileName === 'index.md') {
+        if (diskContent !== indexContent) setIndexContentRaw(diskContent);
+      } else if (fileName === 'log.md') {
+        if (diskContent !== logContent) setLogContentRaw(diskContent);
+      } else {
+        setOkfFiles(prev => {
+          const idx = prev.findIndex(f => f.id === key);
+          if (idx < 0 || prev[idx].content === diskContent) return prev;
+          const updated = { ...prev[idx], content: diskContent };
+          return [...prev.slice(0, idx), updated, ...prev.slice(idx + 1)];
+        });
+      }
+    }
+  }, [diskConnected, fileHandles, saveStatus, indexContent, logContent]);
+
+  /**
    * Initialize with sample data
    */
   const initWithSampleData = useCallback(() => {
@@ -525,7 +567,8 @@ export function useBundle() {
     removeOKFFile,
     applyEdits,
     initWithSampleData,
-    openBundleFromDisk
+    openBundleFromDisk,
+    syncFromDisk
   };
 }
 

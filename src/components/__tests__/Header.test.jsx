@@ -1,6 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Header from '../Header';
+import * as fsAccess from '../../utils/fsAccess';
+
+vi.mock('../../utils/fsAccess', () => ({
+  isFileSystemAccessSupported: vi.fn()
+}));
 
 const baseProps = {
   meta: {},
@@ -62,5 +67,42 @@ describe('Header — bundle save/load wiring', () => {
 
     await waitFor(() => expect(errorSpy).toHaveBeenCalled());
     errorSpy.mockRestore();
+  });
+});
+
+describe('Header — connect-to-folder entry point', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('shows the "Connecter un dossier" button when the File System Access API is supported', () => {
+    fsAccess.isFileSystemAccessSupported.mockReturnValue(true);
+    render(<Header {...baseProps} onSaveBundle={vi.fn()} onLoadBundle={vi.fn()} onConnectFolder={vi.fn()} />);
+    expect(screen.getByText(/Connecter un dossier/)).toBeInTheDocument();
+  });
+
+  it('hides the button when the File System Access API is not supported', () => {
+    fsAccess.isFileSystemAccessSupported.mockReturnValue(false);
+    render(<Header {...baseProps} onSaveBundle={vi.fn()} onLoadBundle={vi.fn()} onConnectFolder={vi.fn()} />);
+    expect(screen.queryByText(/Connecter un dossier/)).not.toBeInTheDocument();
+  });
+
+  it('calls onConnectFolder when clicked', () => {
+    fsAccess.isFileSystemAccessSupported.mockReturnValue(true);
+    const onConnectFolder = vi.fn().mockResolvedValue(undefined);
+    render(<Header {...baseProps} onSaveBundle={vi.fn()} onLoadBundle={vi.fn()} onConnectFolder={onConnectFolder} />);
+    fireEvent.click(screen.getByText(/Connecter un dossier/));
+    expect(onConnectFolder).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs an error instead of throwing when onConnectFolder rejects (e.g. picker cancelled)', async () => {
+    fsAccess.isFileSystemAccessSupported.mockReturnValue(true);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onConnectFolder = vi.fn().mockRejectedValue(new Error('cancelled'));
+    render(<Header {...baseProps} onSaveBundle={vi.fn()} onLoadBundle={vi.fn()} onConnectFolder={onConnectFolder} />);
+
+    fireEvent.click(screen.getByText(/Connecter un dossier/));
+
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled());
   });
 });

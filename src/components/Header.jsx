@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { C, btnStyle, Icon } from '../constants';
+import { isFileSystemAccessSupported } from '../utils/fsAccess';
 import StatusBadge from './StatusBadge';
 
 /**
@@ -28,7 +29,8 @@ export default function Header({
   layout,
   RAG_API_URL,
   onSaveBundle,
-  onLoadBundle
+  onLoadBundle,
+  onConnectFolder
 }) {
   const loadInputRef = React.useRef(null);
 
@@ -44,6 +46,12 @@ export default function Header({
     });
     // Allow re-selecting the same file later
     e.target.value = '';
+  };
+
+  const handleConnectFolder = () => {
+    Promise.resolve(onConnectFolder?.()).catch(err => {
+      console.error('Failed to connect to folder:', err);
+    });
   };
 
   // ==========================================================================
@@ -167,6 +175,17 @@ export default function Header({
             onChange={handleLoadChange}
           />
         </label>
+
+        {/* Connect Folder Button — only where the File System Access API exists */}
+        {isFileSystemAccessSupported() && (
+          <button
+            onClick={handleConnectFolder}
+            style={btnStyle('secondary')}
+            title="Connecter un dossier local : les fiches, index.md et log.md seront enregistrés sur le disque à chaque modification"
+          >
+            📁 Connecter un dossier
+          </button>
+        )}
 
         {/* Read-only / Edit Toggle */}
         <button

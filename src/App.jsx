@@ -21,6 +21,7 @@ export default function OKFWorkspace() {
     setBundleConfig, setOkfFiles, setPdfFiles, setActiveOKFId, setActivePDFId,
     setCurrentPage, setIndexContent, setLogContent, setLayout, setReadOnly, setShowInitializer,
     setActivePDFById, saveOKFFile, applyEdits, initWithSampleData, saveBundle, loadBundle, addPDF,
+    openBundleFromDisk, syncFromDisk,
   } = bundle;
 
   // Seed the workspace with the sample bundle on first load so there is
@@ -32,6 +33,19 @@ export default function OKFWorkspace() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The File System Access API has no watch/push notification, so external
+  // changes (e.g. a fiche edited in another program) are picked up by
+  // re-reading tracked files whenever the window regains focus.
+  useEffect(() => {
+    function handleFocus() {
+      if (diskConnected) {
+        syncFromDisk();
+      }
+    }
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [diskConnected, syncFromDisk]);
 
   const handleOKFContentChange = useCallback((newContent) => {
     if (!activeOKF) return;
@@ -73,6 +87,7 @@ export default function OKFWorkspace() {
         RAG_API_URL={RAG_API_URL}
         onSaveBundle={saveBundle}
         onLoadBundle={loadBundle}
+        onConnectFolder={openBundleFromDisk}
       />
 
       {/* 3-column grid */}

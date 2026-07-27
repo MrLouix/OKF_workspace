@@ -110,6 +110,32 @@ describe('App (composition root)', () => {
     expect(screen.queryByText('Normes ISO 9001')).not.toBeInTheDocument();
   });
 
+  describe('window-focus disk-sync listener', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('subscribes a focus listener on mount and unsubscribes on unmount', () => {
+      const addSpy = vi.spyOn(window, 'addEventListener');
+      const removeSpy = vi.spyOn(window, 'removeEventListener');
+
+      const { unmount } = render(<App />);
+      expect(addSpy).toHaveBeenCalledWith('focus', expect.any(Function));
+
+      const [, handler] = addSpy.mock.calls.find(([type]) => type === 'focus');
+      unmount();
+      expect(removeSpy).toHaveBeenCalledWith('focus', handler);
+    });
+
+    it('does nothing when the window regains focus without a disk folder connected', () => {
+      render(<App />);
+      // No disk folder is connected in this test (default state); firing a
+      // focus event must be a harmless no-op, not a crash.
+      expect(() => fireEvent(window, new Event('focus'))).not.toThrow();
+      expect(screen.getByText('OKF Workspace')).toBeInTheDocument();
+    });
+  });
+
   describe('bundle save -> load round trip through the Header controls', () => {
     afterEach(() => {
       vi.restoreAllMocks();
