@@ -103,6 +103,54 @@ describe('OKFPanel — inline editing via the raw content textarea', () => {
   });
 });
 
+describe('OKFPanel — live disk-save status', () => {
+  it('shows the Ouvrir/Save buttons when disk is not connected (default behavior)', () => {
+    setup();
+    expect(screen.getByText('Ouvrir')).toBeInTheDocument();
+  });
+
+  it('hides the Ouvrir/Save buttons and shows a live status indicator once disk-connected', () => {
+    setup({ diskConnected: true, saveStatus: 'saved' });
+    expect(screen.queryByText('Ouvrir')).not.toBeInTheDocument();
+    expect(screen.getByText('Enregistré')).toBeInTheDocument();
+  });
+
+  it('does not render a status indicator when disk is not connected, even if saveStatus is set', () => {
+    setup({ diskConnected: false, saveStatus: 'saving' });
+    expect(screen.queryByText('Enregistrement…')).not.toBeInTheDocument();
+  });
+
+  it('shows "Enregistrement…" while saveStatus is saving', () => {
+    setup({ diskConnected: true, saveStatus: 'saving' });
+    expect(screen.getByText('Enregistrement…')).toBeInTheDocument();
+  });
+
+  it('shows "Enregistré" while saveStatus is saved', () => {
+    setup({ diskConnected: true, saveStatus: 'saved' });
+    expect(screen.getByText('Enregistré')).toBeInTheDocument();
+  });
+
+  it('shows an error message while saveStatus is error', () => {
+    setup({ diskConnected: true, saveStatus: 'error' });
+    expect(screen.getByText("Erreur d'enregistrement")).toBeInTheDocument();
+  });
+
+  it('treats an undefined/idle saveStatus as "saved" once disk-connected', () => {
+    setup({ diskConnected: true, saveStatus: undefined });
+    expect(screen.getByText('Enregistré')).toBeInTheDocument();
+  });
+
+  it('drops the Save button once disk-connected, keeping only the tab and copy buttons', () => {
+    const { rerender, props } = setup({ diskConnected: false });
+    // Not disk-connected: 2 tab buttons + save button + copy button = 4
+    expect(screen.getAllByRole('button')).toHaveLength(4);
+
+    rerender(<OKFPanel {...props} diskConnected saveStatus="saved" />);
+    // Disk-connected: 2 tab buttons + copy button = 3 (no save button)
+    expect(screen.getAllByRole('button')).toHaveLength(3);
+  });
+});
+
 describe('OKFPanel — read-only mode', () => {
   it('forces the preview tab and hides edit/upload/save controls', () => {
     setup({ readOnly: true });

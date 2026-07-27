@@ -8,22 +8,38 @@ import { C, btnStyle, Icon } from '../constants';
 import StatusBadge from './StatusBadge';
 import MarkdownPreview from './MarkdownPreview';
 
+// Live disk-save status indicator: label and color per saveStatus value.
+// 'idle'/undefined is treated the same as 'saved' (nothing pending yet).
+const SAVE_STATUS_LABEL = {
+  saving: 'Enregistrement…',
+  saved: 'Enregistré',
+  error: "Erreur d'enregistrement"
+};
+
+const SAVE_STATUS_COLOR = {
+  saving: C.amber,
+  saved: C.green,
+  error: C.red
+};
+
 /**
  * OKFPanel - Editor for OKF files with generic metadata
- * 
+ *
  * Features:
  * - Generic metadata fields (ref_document, pages, status, etc.)
  * - Support for both old (RCC-M) and new field names
  * - Edit and preview tabs
  * - File save/load
  */
-export default function OKFPanel({ 
-  content, 
-  onChange, 
+export default function OKFPanel({
+  content,
+  onChange,
   meta,
   readOnly,
   activeOKF,
-  bundleConfig
+  bundleConfig,
+  diskConnected,
+  saveStatus
 }) {
   // ==========================================================================
   // STATE
@@ -108,13 +124,24 @@ export default function OKFPanel({
           {(meta?.status || meta?.statut) && (
             <StatusBadge status={meta.status || meta.statut} />
           )}
-          
+
+          {/* Live disk-save status, only meaningful once a disk folder is connected */}
+          {diskConnected && (
+            <span style={{
+              fontSize: 10,
+              fontFamily: 'monospace',
+              color: SAVE_STATUS_COLOR[saveStatus] || C.muted
+            }}>
+              {SAVE_STATUS_LABEL[saveStatus] || SAVE_STATUS_LABEL.saved}
+            </span>
+          )}
+
           <div style={{
             marginLeft: 'auto',
             display: 'flex',
             gap: 4
           }}>
-            {!readOnly && (
+            {!readOnly && !diskConnected && (
               <>
                 <label style={{
                   ...btnStyle('ghost'),

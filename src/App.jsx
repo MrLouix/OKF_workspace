@@ -17,6 +17,7 @@ export default function OKFWorkspace() {
   const {
     bundleConfig, okfFiles, activeOKF, pdfFiles, activePDFId, activePDFRef,
     currentPage, indexContent, logContent, layout, readOnly, showInitializer, meta,
+    diskConnected, saveStatus,
     setBundleConfig, setOkfFiles, setPdfFiles, setActiveOKFId, setActivePDFId,
     setCurrentPage, setIndexContent, setLogContent, setLayout, setReadOnly, setShowInitializer,
     setActivePDFById, saveOKFFile, applyEdits, initWithSampleData, saveBundle, loadBundle, addPDF,
@@ -85,6 +86,8 @@ export default function OKFWorkspace() {
               readOnly={readOnly}
               activeOKF={activeOKF}
               bundleConfig={bundleConfig}
+              diskConnected={diskConnected}
+              saveStatus={activeOKF ? saveStatus[activeOKF.id] : undefined}
             />
           </div>
           <div style={{ flex: 1, width: "100%", overflow: "hidden" }}>
