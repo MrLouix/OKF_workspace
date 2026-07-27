@@ -6,6 +6,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { parseFrontMatter } from '../utils/parseFrontMatter';
 import { indexPDFInQdrant, removePDFFromQdrant } from '../utils/pdfIndexer';
 import { saveBundle as saveBundleToZIP, importBundleFromZIP } from '../utils/bundleStorage';
+import * as fsAccess from '../utils/fsAccess';
 import { SAMPLE_BUNDLE_CONFIG, SAMPLE_OKF_FILES, SAMPLE_GENERIC_INDEX, SAMPLE_GENERIC_LOG } from '../constants';
 
 /**
@@ -37,6 +38,14 @@ export function useBundle() {
   const [layout, setLayout] = useState("3col");
   const [readOnly, setReadOnly] = useState(false);
   const [showInitializer, setShowInitializer] = useState(false);
+
+  // Live disk connection (File System Access API). When diskConnected is
+  // true, the currently loaded bundle mirrors a real folder on disk;
+  // fileHandles maps each tracked filename ('index.md', 'log.md',
+  // '<okfId>.md') to its FileSystemFileHandle for later writes.
+  const [diskDirHandle, setDiskDirHandle] = useState(null);
+  const [diskConnected, setDiskConnected] = useState(false);
+  const [fileHandles, setFileHandles] = useState({});
 
   // ==========================================================================
   // DERIVED STATE
@@ -132,6 +141,97 @@ export function useBundle() {
       }
     } catch (err) {
       console.error('Failed to load bundle:', err);
+      throw err;
+    }
+  }, []);
+
+  /**
+   * Open a bundle live from a real folder on disk via the File System
+   * Access API. index.md and log.md are treated specially; every other
+   * top-level .md file is loaded as an OKF fiche (its front-matter id, or
+   * the filename if none, becomes the OKF id). A bundle.json at the folder
+   * root is used for the bundle config if present, otherwise a minimal
+   * config is synthesized from the folder name.
+   *
+   * On any failure (permission denied, picker cancelled, etc.) no bundle
+   * state is mutated other than diskConnected, which is reset to false,
+   * and the error is rethrown so the caller can surface it.
+   */
+  const openBundleFromDisk = useCallback(async () => {
+    try {
+      const dirHandle = await fsAccess.pickDirectory();
+
+      const granted = await fsAccess.verifyPermission(dirHandle, 'readwrite');
+      if (!granted) {
+        throw new Error('Read-write permission to the selected folder was not granted');
+      }
+
+      const mdFiles = await fsAccess.listMarkdownFiles(dirHandle);
+
+      const newFileHandles = {};
+      let newIndexContent = SAMPLE_GENERIC_INDEX;
+      let newLogContent = SAMPLE_GENERIC_LOG;
+      const newOkfFiles = [];
+
+      for (const { name, handle } of mdFiles) {
+        newFileHandles[name] = handle;
+        const content = await fsAccess.readFileText(handle);
+
+        if (name === 'index.md') {
+          newIndexContent = content;
+        } else if (name === 'log.md') {
+          newLogContent = content;
+        } else {
+          const meta = parseFrontMatter(content);
+          const id = meta.id || name.replace(/\.md$/i, '');
+          newOkfFiles.push({
+            id,
+            title: meta.title || id,
+            ref_document: meta.ref_document || meta.ref_rccm || '',
+            pages: meta.pages,
+            status: meta.status || meta.statut || 'DRAFT',
+            version: meta.version,
+            author: meta.author || meta.auteur,
+            updated_at: meta.updated_at || meta.date_maj,
+            tags: meta.tags,
+            related: meta.related || meta.liens,
+            content
+          });
+        }
+      }
+
+      let newBundleConfig;
+      try {
+        const bundleJsonHandle = await dirHandle.getFileHandle('bundle.json', { create: false });
+        const bundleJsonText = await fsAccess.readFileText(bundleJsonHandle);
+        newBundleConfig = JSON.parse(bundleJsonText).bundle;
+      } catch {
+        const now = new Date().toISOString();
+        newBundleConfig = {
+          id: generateId('bundle'),
+          name: dirHandle.name,
+          description: '',
+          path: dirHandle.name,
+          createdAt: now,
+          updatedAt: now,
+          pdfs: []
+        };
+      }
+
+      setDiskDirHandle(dirHandle);
+      setFileHandles(newFileHandles);
+      setBundleConfig(newBundleConfig);
+      setOkfFiles(newOkfFiles);
+      setActiveOKFId(newOkfFiles[0]?.id || null);
+      setPdfFiles({});
+      setActivePDFId(null);
+      setIndexContent(newIndexContent);
+      setLogContent(newLogContent);
+      setShowInitializer(false);
+      setDiskConnected(true);
+    } catch (err) {
+      setDiskConnected(false);
+      console.error('Failed to open bundle from disk:', err);
       throw err;
     }
   }, []);
@@ -319,7 +419,10 @@ export function useBundle() {
     readOnly,
     showInitializer,
     meta,
-    
+    diskDirHandle,
+    diskConnected,
+    fileHandles,
+
     // Setters
     setBundleConfig,
     setOkfFiles,
@@ -332,7 +435,7 @@ export function useBundle() {
     setLayout,
     setReadOnly,
     setShowInitializer,
-    
+
     // Actions
     createBundle,
     loadBundle,
@@ -343,7 +446,8 @@ export function useBundle() {
     saveOKFFile,
     removeOKFFile,
     applyEdits,
-    initWithSampleData
+    initWithSampleData,
+    openBundleFromDisk
   };
 }
 

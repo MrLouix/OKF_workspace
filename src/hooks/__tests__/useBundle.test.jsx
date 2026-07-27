@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useBundle, generateId, getPDFRefByName, getOKFById } from '../useBundle';
+import * as fsAccess from '../../utils/fsAccess';
 
 // Mock pdfIndexer for all tests to avoid actual Qdrant API calls
 vi.mock('../../utils/pdfIndexer', () => ({
@@ -9,6 +10,18 @@ vi.mock('../../utils/pdfIndexer', () => ({
   pdfExistsInQdrant: vi.fn().mockResolvedValue(false),
   extractTextFromPDF: vi.fn().mockResolvedValue('extracted text'),
   splitTextIntoChunks: vi.fn().mockReturnValue(['chunk1', 'chunk2']),
+}));
+
+// Mock fsAccess for all disk-related tests; individual tests configure
+// the specific behavior of each function they need.
+vi.mock('../../utils/fsAccess', () => ({
+  isFileSystemAccessSupported: vi.fn(),
+  pickDirectory: vi.fn(),
+  verifyPermission: vi.fn(),
+  getOrCreateFileHandle: vi.fn(),
+  readFileText: vi.fn(),
+  writeFileAtomic: vi.fn(),
+  listMarkdownFiles: vi.fn(),
 }));
 
 describe('generateId', () => {
@@ -241,5 +254,139 @@ describe('useBundle', () => {
     expect(result.current.bundleConfig).toEqual(newBundle);
     expect(result.current.pdfFiles).toEqual({});
     expect(result.current.activePDFId).toBeNull();
+  });
+});
+
+describe('openBundleFromDisk', () => {
+  function makeFakeDir({ hasBundleJson = false } = {}) {
+    const indexHandle = { kind: 'file', name: 'index.md' };
+    const logHandle = { kind: 'file', name: 'log.md' };
+    const okfHandle = { kind: 'file', name: 'OKF-1.md' };
+
+    const dirHandle = {
+      kind: 'directory',
+      name: 'my-folder',
+      getFileHandle: vi.fn(async (name, opts) => {
+        if (name === 'bundle.json' && hasBundleJson) {
+          return { kind: 'file', name: 'bundle.json' };
+        }
+        throw new Error(`File not found: ${name}`);
+      }),
+    };
+
+    return { dirHandle, indexHandle, logHandle, okfHandle };
+  }
+
+  it('reads index.md, log.md, and OKF fiches from disk and synthesizes a bundle config when there is no bundle.json', async () => {
+    const { dirHandle, indexHandle, logHandle, okfHandle } = makeFakeDir();
+
+    fsAccess.pickDirectory.mockResolvedValue(dirHandle);
+    fsAccess.verifyPermission.mockResolvedValue(true);
+    fsAccess.listMarkdownFiles.mockResolvedValue([
+      { name: 'index.md', handle: indexHandle },
+      { name: 'log.md', handle: logHandle },
+      { name: 'OKF-1.md', handle: okfHandle },
+    ]);
+    fsAccess.readFileText.mockImplementation(async (handle) => {
+      if (handle === indexHandle) return '# index content';
+      if (handle === logHandle) return '# log content';
+      if (handle === okfHandle) return '---\nid: OKF-1\ntitle: My Fiche\n---\n\nBody';
+      throw new Error('unexpected handle');
+    });
+
+    const { result } = renderHook(() => useBundle());
+
+    await act(async () => {
+      await result.current.openBundleFromDisk();
+    });
+
+    expect(result.current.diskConnected).toBe(true);
+    expect(result.current.diskDirHandle).toBe(dirHandle);
+    expect(result.current.fileHandles).toEqual({
+      'index.md': indexHandle,
+      'log.md': logHandle,
+      'OKF-1.md': okfHandle,
+    });
+    expect(result.current.indexContent).toBe('# index content');
+    expect(result.current.logContent).toBe('# log content');
+    expect(result.current.okfFiles).toHaveLength(1);
+    expect(result.current.okfFiles[0]).toMatchObject({
+      id: 'OKF-1',
+      title: 'My Fiche',
+      content: '---\nid: OKF-1\ntitle: My Fiche\n---\n\nBody',
+    });
+    expect(result.current.activeOKFId).toBe('OKF-1');
+    expect(result.current.bundleConfig).toMatchObject({ name: 'my-folder', pdfs: [] });
+  });
+
+  it('derives the OKF id from the filename when the front-matter has none', async () => {
+    const { dirHandle, okfHandle } = makeFakeDir();
+    fsAccess.pickDirectory.mockResolvedValue(dirHandle);
+    fsAccess.verifyPermission.mockResolvedValue(true);
+    fsAccess.listMarkdownFiles.mockResolvedValue([{ name: 'OKF-1.md', handle: okfHandle }]);
+    fsAccess.readFileText.mockResolvedValue('no front matter here');
+
+    const { result } = renderHook(() => useBundle());
+    await act(async () => {
+      await result.current.openBundleFromDisk();
+    });
+
+    expect(result.current.okfFiles[0].id).toBe('OKF-1');
+  });
+
+  it('uses bundle.json for the bundle config when present', async () => {
+    const { dirHandle } = makeFakeDir({ hasBundleJson: true });
+    const bundleFromDisk = { id: 'b-disk', name: 'Disk Bundle', pdfs: [] };
+    fsAccess.pickDirectory.mockResolvedValue(dirHandle);
+    fsAccess.verifyPermission.mockResolvedValue(true);
+    fsAccess.listMarkdownFiles.mockResolvedValue([]);
+    fsAccess.readFileText.mockResolvedValue(
+      JSON.stringify({ version: '1.0', bundle: bundleFromDisk, files: [] })
+    );
+
+    const { result } = renderHook(() => useBundle());
+    await act(async () => {
+      await result.current.openBundleFromDisk();
+    });
+
+    expect(result.current.bundleConfig).toEqual(bundleFromDisk);
+  });
+
+  it('leaves diskConnected false and rethrows when read-write permission is not granted', async () => {
+    const { dirHandle } = makeFakeDir();
+    fsAccess.pickDirectory.mockResolvedValue(dirHandle);
+    fsAccess.verifyPermission.mockResolvedValue(false);
+
+    const { result } = renderHook(() => useBundle());
+    const previousBundleConfig = result.current.bundleConfig;
+
+    await expect(
+      act(async () => {
+        await result.current.openBundleFromDisk();
+      })
+    ).rejects.toThrow();
+
+    expect(result.current.diskConnected).toBe(false);
+    expect(result.current.bundleConfig).toBe(previousBundleConfig);
+  });
+
+  it('reverts diskConnected to false and rethrows when the picker is cancelled', async () => {
+    const abortErr = new DOMException('The user aborted a request.', 'AbortError');
+    fsAccess.pickDirectory.mockRejectedValue(abortErr);
+
+    const { result } = renderHook(() => useBundle());
+    act(() => {
+      result.current.initWithSampleData();
+    });
+    const bundleConfigBefore = result.current.bundleConfig;
+
+    await expect(
+      act(async () => {
+        await result.current.openBundleFromDisk();
+      })
+    ).rejects.toThrow();
+
+    expect(result.current.diskConnected).toBe(false);
+    expect(result.current.bundleConfig).toBe(bundleConfigBefore);
   });
 });
