@@ -8,7 +8,6 @@ import { C, Icon } from '../constants';
 
 /**
  * ChunksDrawer - Expandable drawer showing RAG chunks injected into context
- * Updated to show generic document context instead of RCC-M specific
  */
 export default function ChunksDrawer({ chunks, ragStatus, bundleConfig }) {
   const [expanded, setExpanded] = useState(null);

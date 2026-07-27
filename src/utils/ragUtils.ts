@@ -4,6 +4,7 @@
 // Co-Authored-By: Mistral Vibe <vibe@mistral.ai>
 
 import { RAGRequest, RAGResponse, RAGChunk } from '../types';
+import { RAG_API_URL, RAG_TOP_K, RAG_API_KEY } from '../constants';
 
 /**
  * Build RAG query from metadata and user message
@@ -73,9 +74,6 @@ export async function fetchRagChunks(
   userMessage: string,
   bundleConfig: any | null
 ): Promise<RAGChunk[]> {
-  // Import here to avoid circular dependency
-  const { RAG_API_URL, RAG_TOP_K, RAG_API_KEY } = await import('../constants');
-  
   if (!RAG_API_URL) return [];
   
   const query = buildRagQuery(meta, userMessage, bundleConfig);

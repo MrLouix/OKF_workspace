@@ -4,8 +4,7 @@
 // Co-Authored-By: Mistral Vibe <vibe@mistral.ai>
 
 import React, { useState, useEffect } from 'react';
-import { C, btnStyle, Icon, STATUS_LABELS } from '../constants';
-import { parseFrontMatter, stripFrontMatter } from '../utils/parseFrontMatter';
+import { C, btnStyle, Icon } from '../constants';
 import StatusBadge from './StatusBadge';
 import MarkdownPreview from './MarkdownPreview';
 

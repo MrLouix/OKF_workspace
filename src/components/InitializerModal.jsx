@@ -5,8 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { C, btnStyle, Icon } from '../constants';
-import { createBundleConfig, createOKFFile } from '../utils/bundleStorage';
-import { generateId } from '../hooks/useBundle';
+import { createBundleConfig } from '../utils/bundleStorage';
 
 /**
  * InitializerModal - 4-step wizard for bundle creation
