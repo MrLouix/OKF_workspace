@@ -6,18 +6,35 @@
 import React, { useState } from 'react';
 import { C, btnStyle } from '../constants';
 
+// Live disk-save status indicator: label and color per saveStatus value.
+// 'idle'/undefined is treated the same as 'saved' (nothing pending yet).
+// Kept in sync with the equivalent map in OKFPanel.jsx.
+const SAVE_STATUS_LABEL = {
+  saving: 'Enregistrement…',
+  saved: 'Enregistré',
+  error: "Erreur d'enregistrement"
+};
+
+const SAVE_STATUS_COLOR = {
+  saving: C.amber,
+  saved: C.green,
+  error: C.red
+};
+
 /**
  * SideFiles - Editor for index.md, log.md, and active OKF file
  * Occupies the lower part of the left column
  */
-export default function SideFiles({ 
-  indexContent, 
-  logContent, 
+export default function SideFiles({
+  indexContent,
+  logContent,
   bundleConfig,
-  onIndexChange, 
+  onIndexChange,
   onLogChange,
   onExportZIP,
-  readOnly 
+  readOnly,
+  diskConnected,
+  saveStatus
 }) {
   const [active, setActive] = useState('index');
   const fileInputRef = React.useRef(null);
@@ -81,9 +98,23 @@ export default function SideFiles({
             {label}
           </button>
         ))}
-        
+
+        {/* Live disk-save status, only meaningful once a disk folder is connected */}
+        {diskConnected && (
+          <span style={{
+            alignSelf: 'center',
+            marginRight: 6,
+            fontSize: 10,
+            fontFamily: 'monospace',
+            color: SAVE_STATUS_COLOR[saveStatus?.[active]] || C.muted,
+            whiteSpace: 'nowrap'
+          }}>
+            {SAVE_STATUS_LABEL[saveStatus?.[active]] || SAVE_STATUS_LABEL.saved}
+          </span>
+        )}
+
         <div style={{ display: 'flex', gap: 2, padding: '4px 6px', flexShrink: 0 }}>
-          {!readOnly && (
+          {!readOnly && !diskConnected && (
             <label style={{ ...btnStyle('ghost'), cursor: 'pointer', padding: '2px 6px', fontSize: 10 }}>
               ↑
               <input
@@ -97,16 +128,18 @@ export default function SideFiles({
               />
             </label>
           )}
-          <button
-            onClick={() => handleFileSave(
-              active === 'index' ? 'index.md' : 'log.md',
-              active === 'index' ? indexContent : logContent
-            )}
-            style={{ ...btnStyle('ghost'), padding: '2px 6px', fontSize: 10 }}
-            title="Télécharger ce fichier"
-          >
-            ↓
-          </button>
+          {!diskConnected && (
+            <button
+              onClick={() => handleFileSave(
+                active === 'index' ? 'index.md' : 'log.md',
+                active === 'index' ? indexContent : logContent
+              )}
+              style={{ ...btnStyle('ghost'), padding: '2px 6px', fontSize: 10 }}
+              title="Télécharger ce fichier"
+            >
+              ↓
+            </button>
+          )}
           {bundleConfig && (
             <button
               onClick={onExportZIP}

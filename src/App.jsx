@@ -99,6 +99,8 @@ export default function OKFWorkspace() {
               onLogChange={setLogContent}
               onExportZIP={handleExportAllAsZIP}
               readOnly={readOnly}
+              diskConnected={diskConnected}
+              saveStatus={saveStatus}
             />
           </div>
         </div>
