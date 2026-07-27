@@ -4,7 +4,7 @@
 // Co-Authored-By: Mistral Vibe <vibe@mistral.ai>
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { C, btnStyle, Icon, LLM_API_URL, LLM_MODEL, LLM_API_KEY } from '../constants';
+import { C, btnStyle, Icon, LLM_API_URL, LLM_MODEL, LLM_API_KEY, RAG_API_URL } from '../constants';
 import { buildRagQuery, fetchRagChunks, formatChunksForPrompt, buildSystemPrompt, getRagStatus, getRagIndicatorLabel } from '../utils/ragUtils';
 import ChunksDrawer from './ChunksDrawer';
 
@@ -48,7 +48,7 @@ Que souhaitez-vous faire ?`
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [ragStatus, setRagStatus] = useState(LLM_API_URL ? 'idle' : 'disabled');
+  const [ragStatus, setRagStatus] = useState(RAG_API_URL ? 'idle' : 'disabled');
   const [lastChunks, setLastChunks] = useState([]);
   const bottomRef = useRef(null);
 
@@ -77,7 +77,7 @@ Que souhaitez-vous faire ?`
 
     // -- 1. RETRIEVAL : build query from metadata and user message
     let chunks = [];
-    if (LLM_API_URL) {
+    if (RAG_API_URL) {
       setRagStatus('loading');
       chunks = await fetchRagChunks(meta, userMessage, bundleConfig);
       setLastChunks(chunks);
@@ -361,8 +361,8 @@ Que souhaitez-vous faire ?`
           alignItems: 'center',
           gap: 4,
           fontSize: 10,
-          color: getRagStatus(LLM_API_URL, lastChunks, loading) === 'ok' ? C.teal : 
-                 getRagStatus(LLM_API_URL, lastChunks, loading) === 'loading' ? C.amber : C.muted,
+          color: getRagStatus(RAG_API_URL, lastChunks, loading) === 'ok' ? C.teal :
+                 getRagStatus(RAG_API_URL, lastChunks, loading) === 'loading' ? C.amber : C.muted,
           fontFamily: 'monospace'
         }}>
           <Icon.rag /> {getRagIndicatorLabel(ragStatus, lastChunks.length)}
