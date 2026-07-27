@@ -103,6 +103,11 @@ export function useBundle() {
             setBundleConfig(data.bundle);
             setOkfFiles(data.files);
             setActiveOKFId(data.files[0]?.id || null);
+            // Clear any PDFs loaded for a previously active bundle — a
+            // loaded bundle.json only carries PDF references, not the
+            // actual blobs, so stale entries would otherwise linger.
+            setPdfFiles({});
+            setActivePDFId(null);
             setIndexContent(SAMPLE_GENERIC_INDEX);
             setLogContent(SAMPLE_GENERIC_LOG);
             setShowInitializer(false);

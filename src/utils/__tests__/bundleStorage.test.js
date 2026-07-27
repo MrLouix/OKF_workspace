@@ -7,6 +7,7 @@ import {
   importBundleFromZIP,
 } from '../bundleStorage';
 import { parseFrontMatter } from '../parseFrontMatter';
+import { SAMPLE_BUNDLE_CONFIG, SAMPLE_OKF_FILES } from '../../constants';
 
 describe('createBundleConfig', () => {
   it('generates sensible defaults', () => {
@@ -110,6 +111,17 @@ describe('saveBundle / loadBundle round trip', () => {
     expect(() => saveBundle(null, [])).not.toThrow();
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  it('round-trips the real generic sample data (SAMPLE_BUNDLE_CONFIG / SAMPLE_OKF_FILES)', async () => {
+    const json = JSON.stringify({ version: '1.0', bundle: SAMPLE_BUNDLE_CONFIG, files: SAMPLE_OKF_FILES }, null, 2);
+    const file = new File([json], 'bundle.json', { type: 'application/json' });
+
+    const result = await loadBundle(file);
+    expect(result.bundleConfig).toEqual(SAMPLE_BUNDLE_CONFIG);
+    expect(result.okfFiles).toEqual(SAMPLE_OKF_FILES);
+    // Sanity check the loaded OKF content still parses correctly post round-trip
+    expect(parseFrontMatter(result.okfFiles[0].content).id).toBe(SAMPLE_OKF_FILES[0].id);
   });
 });
 

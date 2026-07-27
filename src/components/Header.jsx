@@ -18,7 +18,7 @@ import StatusBadge from './StatusBadge';
  * - Layout buttons
  * - New Bundle button
  */
-export default function Header({ 
+export default function Header({
   meta,
   bundleConfig,
   setShowInitializer,
@@ -26,8 +26,25 @@ export default function Header({
   setReadOnly,
   setLayout,
   layout,
-  RAG_API_URL
+  RAG_API_URL,
+  onSaveBundle,
+  onLoadBundle
 }) {
+  const loadInputRef = React.useRef(null);
+
+  // ==========================================================================
+  // HANDLERS
+  // ==========================================================================
+
+  const handleLoadChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    Promise.resolve(onLoadBundle?.(file)).catch(err => {
+      console.error('Failed to load bundle:', err);
+    });
+    // Allow re-selecting the same file later
+    e.target.value = '';
+  };
 
   // ==========================================================================
   // RENDER
@@ -125,6 +142,31 @@ export default function Header({
         >
           <span style={{ fontSize: 12 }}>➕ Nouveau Bundle</span>
         </button>
+
+        {/* Save Bundle Button */}
+        <button
+          onClick={() => onSaveBundle?.()}
+          disabled={!bundleConfig}
+          style={{ ...btnStyle('secondary'), opacity: bundleConfig ? 1 : 0.5, cursor: bundleConfig ? 'pointer' : 'not-allowed' }}
+          title="Sauvegarder le bundle (bundle.json)"
+        >
+          <Icon.save /> Sauvegarder
+        </button>
+
+        {/* Load Bundle Button */}
+        <label
+          style={{ ...btnStyle('secondary'), cursor: 'pointer' }}
+          title="Charger un bundle (bundle.json)"
+        >
+          <Icon.upload /> Charger
+          <input
+            ref={loadInputRef}
+            type="file"
+            accept=".json,application/json"
+            style={{ display: 'none' }}
+            onChange={handleLoadChange}
+          />
+        </label>
 
         {/* Read-only / Edit Toggle */}
         <button

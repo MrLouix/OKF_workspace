@@ -40,6 +40,9 @@ export const C = {
 
 // ============================================================================
 // SAMPLE DATA - Backward Compatible (Old RCC-M Format)
+// Not used by any app code path — kept only as a fixture for
+// parseFrontMatter's backward-compatibility tests (real RCC-M-shaped
+// front-matter, as opposed to synthetic strings written by hand).
 // ============================================================================
 
 export const SAMPLE_OKF = `---
@@ -91,31 +94,6 @@ conformément au RCC-M Tome I, Livre B, Chapitre B5300.
 | 1.0 | 2024-01-10 | Création initiale |
 | 1.1 | 2024-03-22 | Ajout tableau références |
 | 1.2 | 2024-06-15 | EN COURS |
-`;
-
-export const SAMPLE_INDEX = `# index.md — Registre des fiches OKF
-
-| ID | Titre | Statut | Pages RCC-M | Liens |
-|----|-------|--------|-------------|-------|
-| OKF-2024-001 | Procédures générales soudage | VALIDÉ | 120-135 | - |
-| OKF-2024-002 | Matériaux de base classe 1 | VALIDÉ | 80-98 | OKF-2024-001 |
-| OKF-2024-003 | Contrôle des soudures bout-à-bout | EN_COURS | 142-158 | OKF-2024-001, OKF-2024-007 |
-| OKF-2024-004 | Traitement thermique | BROUILLON | 200-215 | - |
-| OKF-2024-005 | Épreuves hydrauliques | VALIDÉ | 310-325 | OKF-2024-003 |
-| OKF-2024-007 | Qualification soudeurs | VALIDÉ | 110-119 | OKF-2024-001 |
-`;
-
-export const SAMPLE_LOG = `# log.md — Journal des modifications
-
-## 2024-06-15
-- [OKF-2024-003] v1.2 — Révision en cours (amendement B5310-2024)
-- [index.md] Mise à jour statut OKF-2024-003 → EN_COURS
-
-## 2024-05-30
-- [OKF-2024-005] v2.0 — Validation finale épreuves hydrauliques
-
-## 2024-03-22
-- [OKF-2024-003] v1.1 — Ajout tableau références paragraphes
 `;
 
 // ============================================================================

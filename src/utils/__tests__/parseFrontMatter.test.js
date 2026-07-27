@@ -5,6 +5,7 @@ import {
   hasFrontMatter,
   stripFrontMatter,
 } from '../parseFrontMatter';
+import { SAMPLE_OKF, SAMPLE_OKF_FILES } from '../../constants';
 
 describe('parseFrontMatter', () => {
   it('returns {} for missing/undefined content', () => {
@@ -145,6 +146,42 @@ title: "Quoted Title"
 ---
 Body`;
     expect(parseFrontMatter(md).title).toBe('Quoted Title');
+  });
+});
+
+describe('parseFrontMatter against real sample data (regression guard for field-mapping)', () => {
+  it('parses the real legacy RCC-M sample fixture (SAMPLE_OKF) end to end', () => {
+    const meta = parseFrontMatter(SAMPLE_OKF);
+    // Old field names preserved as-is
+    expect(meta.titre).toBe('Contrôle des soudures bout-à-bout');
+    expect(meta.ref_rccm).toBe('B5300, B5310, B5320');
+    expect(meta.statut).toBe('EN_COURS');
+    expect(meta.auteur).toBe('J. Martin');
+    expect(meta.date_maj).toBe('2024-06-15');
+    // Mapped to their generic equivalents
+    expect(meta.title).toBe('Contrôle des soudures bout-à-bout');
+    expect(meta.ref_document).toBe('B5300, B5310, B5320');
+    expect(meta.status).toBe('EN_COURS');
+    expect(meta.author).toBe('J. Martin');
+    expect(meta.updated_at).toBe('2024-06-15');
+    expect(meta.pages).toEqual({ start: 142, end: 158, raw: '142-158' });
+    // Bracket tags and the multi-line "liens" block array
+    expect(meta.tags).toEqual(['soudure', 'contrôle', 'END']);
+    expect(meta.related).toEqual(['OKF-2024-001', 'OKF-2024-007']);
+    expect(meta.liens).toEqual(['OKF-2024-001', 'OKF-2024-007']);
+  });
+
+  it('parses every real generic sample fixture (SAMPLE_OKF_FILES) end to end', () => {
+    for (const okf of SAMPLE_OKF_FILES) {
+      const meta = parseFrontMatter(okf.content);
+      expect(meta.id).toBe(okf.id);
+      expect(meta.title).toBe(okf.title);
+      expect(meta.ref_document).toBe(okf.ref_document);
+      expect(meta.status).toBe(okf.status);
+      if (okf.pages) expect(meta.pages).toEqual(okf.pages);
+      if (okf.tags) expect(meta.tags).toEqual(okf.tags);
+      if (okf.related?.length) expect(meta.related).toEqual(okf.related);
+    }
   });
 });
 

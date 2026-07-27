@@ -18,7 +18,7 @@ export default function OKFWorkspace() {
     currentPage, indexContent, logContent, layout, readOnly, showInitializer, meta,
     setBundleConfig, setOkfFiles, setPdfFiles, setActiveOKFId, setActivePDFId,
     setCurrentPage, setIndexContent, setLogContent, setLayout, setReadOnly, setShowInitializer,
-    setActivePDFById, saveOKFFile, applyEdits, initWithSampleData,
+    setActivePDFById, saveOKFFile, applyEdits, initWithSampleData, saveBundle, loadBundle,
   } = bundle;
 
   // Seed the workspace with the sample bundle on first load so there is
@@ -63,6 +63,8 @@ export default function OKFWorkspace() {
         setLayout={setLayout}
         layout={layout}
         RAG_API_URL={RAG_API_URL}
+        onSaveBundle={saveBundle}
+        onLoadBundle={loadBundle}
       />
 
       {/* 3-column grid */}

@@ -205,4 +205,32 @@ describe('useBundle', () => {
     expect(result.current.okfFiles).toEqual(files);
     expect(result.current.activeOKFId).toBe('OKF-9');
   });
+
+  it('loadBundle clears stale pdfFiles/activePDFId left over from a previously loaded bundle', async () => {
+    const { result } = renderHook(() => useBundle());
+
+    // Simulate a previous bundle with an actively loaded PDF blob
+    act(() => {
+      result.current.createBundle({ id: 'old', name: 'Old Bundle', pdfs: [] });
+    });
+    const oldFile = new File(['a'], 'old.pdf', { type: 'application/pdf' });
+    act(() => {
+      result.current.addPDF(oldFile);
+    });
+    expect(Object.keys(result.current.pdfFiles)).toHaveLength(1);
+    expect(result.current.activePDFId).not.toBeNull();
+
+    // A bundle.json only carries PDF *references*, never the actual blobs
+    const newBundle = { id: 'new', name: 'New Bundle', pdfs: [{ id: 'pdf-x', name: 'x.pdf', path: 'x.pdf', pages: { start: 1, end: 1, raw: '1-1' } }] };
+    const file = new File([JSON.stringify({ version: '1.0', bundle: newBundle, files: [] })], 'bundle.json', {
+      type: 'application/json',
+    });
+    await act(async () => {
+      await result.current.loadBundle(file);
+    });
+
+    expect(result.current.bundleConfig).toEqual(newBundle);
+    expect(result.current.pdfFiles).toEqual({});
+    expect(result.current.activePDFId).toBeNull();
+  });
 });
